@@ -10,6 +10,7 @@
 | 后端 | `@fellow99/node-bridge` 起的 Node v24.2.0（进程内，`dlopen` + `node::Start`） |
 | 前端 | ArkWeb 加载 `http://127.0.0.1:<port>/`（页面由本地服务渲染，同源零 CORS） |
 | 当前状态 | **骨架**：依赖接线与编译构建已通；载荷、鉴权、能力对齐待 Phase 1–3 |
+| 规划文档 | [`docs/000-工程规划.md`](docs/000-工程规划.md)（v0.1，**结论以它为准**）；运行时契约见 `ohos-node-bridge/docs/000-工程规划.md` §6 |
 
 ## 目录
 

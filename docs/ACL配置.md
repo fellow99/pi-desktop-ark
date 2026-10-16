@@ -2,6 +2,7 @@
 
 > **口径**：与 `pi-desktop-hos` **逐项一致**（基准：`pi-desktop-hos/docs/ACL申请清单.md`）。
 > 落点：`entry/src/main/module.json5`（单一模块应用，声明面集中在 entry）。
+> **规划**：`docs/000-工程规划.md` **§10** 是摘要与验收判据；**本文给完整明细与两次实测的原始证据**。
 
 ## 1. 声明面（代码事实）
 
