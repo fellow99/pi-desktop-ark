@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pi Desktop V2 — 启动失败</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      font: 14px/1.7 -apple-system, "HarmonyOS Sans", "Segoe UI", sans-serif;
+      background: #fafafa; color: #333; padding: 24px; box-sizing: border-box;
+    }
+    .box { max-width: 44rem; width: 100%; }
+    h1 { font-size: 1.15rem; font-weight: 600; margin: 0 0 .5rem; }
+    .restart {
+      margin: .75rem 0 1.25rem; padding: .75rem 1rem; border-radius: 8px;
+      background: #fff3f3; border: 1px solid #ffd0d0; color: #b3261e; font-weight: 600;
+    }
+    .hint { color: #777; font-size: 12px; margin: 0 0 1rem; }
+    dl { margin: 0; display: grid; grid-template-columns: 7.5rem 1fr; gap: .25rem .75rem; }
+    dt { color: #777; }
+    dd { margin: 0; word-break: break-all; font-family: ui-monospace, monospace; font-size: 12px; }
+    details { margin-top: 1.25rem; }
+    summary { cursor: pointer; color: #4a8cff; }
+    pre {
+      margin: .5rem 0 0; padding: .75rem; border-radius: 6px; background: #f0f0f0;
+      font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-all;
+      max-height: 16rem; overflow: auto;
+    }
+    .warn { color: #b3261e; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Pi Desktop V2 启动失败</h1>
+    <div class="restart">
+      请重启应用：请全部退出（从任务栏／托盘关闭窗口）后重新打开。
+      本应用把 Node 运行时嵌在<strong>自己的进程</strong>里，而进程内 Node <strong>无法在应用内重启</strong>，
+      因此本页刻意不提供「重试」按钮。
+    </div>
+    <p class="hint" id="hint">正在读取失败详情…（详情由宿主注入；读不到时以界面状态行与诊断面板为准）</p>
+    <dl>
+      <dt>状态</dt><dd id="state">(未注入)</dd>
+      <dt>阶段</dt><dd id="stage">(未注入)</dd>
+      <dt>载荷路线</dt><dd id="route">(未注入)</dd>
+      <dt>失败原因</dt><dd id="detail" class="warn">(未注入)</dd>
+      <dt>运行时错误</dt><dd id="lastError">(未注入)</dd>
+    </dl>
+    <details>
+      <summary>诊断信息（getDiagnostics JSON）</summary>
+      <pre id="diagnostics">(未注入)</pre>
+    </details>
+    <details>
+      <summary>载荷日志尾（app.log —— 独立日志通道，硬约束 ⑱）</summary>
+      <pre id="appLog">(未注入)</pre>
+    </details>
+  </div>
+  <script>
+    // 宿主（ArkTS 侧 Index.injectErrorDetail）在页面加载完成后注入：
+    //   window.__piError({ state, stage, route, detail, lastError, hint, diagnostics, appLog })
+    // 注入失败时本页仍显示内置文案：失败可见优先于信息完整。
+    window.__piError = function (payload) {
+      try {
+        var data = payload || {};
+        var set = function (id, value) {
+          var el = document.getElementById(id);
+          if (!el) { return; }
+          if (typeof value === 'string') {
+            el.textContent = value;
+          } else if (value === undefined || value === null) {
+            el.textContent = '(未提供)';
+          } else {
+            el.textContent = JSON.stringify(value, null, 2);
+          }
+        };
+        set('state', data.state);
+        set('stage', data.stage);
+        set('route', data.route);
+        set('detail', data.detail);
+        set('lastError', data.lastError);
+        set('diagnostics', data.diagnostics);
+        set('appLog', data.appLog);
+        var hint = document.getElementById('hint');
+        if (hint && data.hint) {
+          hint.textContent = data.hint;
+        }
+      } catch (e) {
+        // 注入失败不能让错误页本身变成白屏
+        var fallback = document.getElementById('hint');
+        if (fallback) {
+          fallback.textContent = '详情渲染失败：' + (e && e.message ? e.message : String(e));
+        }
+      }
+    };
+  </script>
+</body>
+</html>

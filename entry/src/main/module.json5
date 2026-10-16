@@ -11,6 +11,12 @@
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
+    // 规划 §5.9（体积）/ §5.10 第 6 条：原生库压缩进 HAP。
+    // 依据：实测 HAP 里 `.so` 的 compress_type = 0（STORED），libnode.so 一个就 ≈121 MB；
+    // 这两个字段必须写在 **module 级**（写进 build-profile.json5 会被 schema 拒绝）。
+    // compressNativeLibs = 压缩打包；extractNativeLibs = 安装时解到 libs/（dlopen 仍可直接加载）。
+    "compressNativeLibs": true,
+    "extractNativeLibs": true,
     "abilities": [
       {
         "name": "EntryAbility",
@@ -25,6 +31,9 @@
         "backgroundModes": [
           "taskKeeping"
         ],
+        // 硬约束 ⑰（真机实测：端口被占 ⇒ EADDRINUSE ⇒ 整个 App 进程 abort）：
+        // 单实例是「端口随机 + 数据目录唯一」的前提，多实例会互抢端口与 <filesDir>。
+        "launchType": "singleton",
         "exported": true,
         "skills": [
           {

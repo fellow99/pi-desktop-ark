@@ -23,3 +23,10 @@ libs/**/*.har
 entry/src/main/resources/resfile/pi-web/*
 !entry/src/main/resources/resfile/pi-web/README.md
 *.hap
+
+# ── 库自带 Node 侧载荷（**派生**，不入库）──
+# 由 scripts/assemble-payload.mjs 从 ../ohos-node-bridge/payload/ 逐字节拷入（构建期自动完成）。
+# 入库会与库侧副本产生两份事实源；本工程自己的载荷（selfcheck.js / error.html）仍入库。
+entry/src/main/resources/rawfile/bootstrap.js
+entry/src/main/resources/rawfile/host.js
+entry/src/main/resources/rawfile/lib/
