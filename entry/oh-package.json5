@@ -1,6 +1,9 @@
 {
   "name": "entry",
-  "version": "0.1.0",
+  // ⚠️ 必须是 **≥1.0.0** 的 SemVer：hvigor 对模块版本做 SemVer 校验，0.x 会告警
+  //（"does not comply with the SemVer specification"）。应用自身的对外版本号在
+  // AppScope/app.json5 的 versionName / versionCode，与此处无关。
+  "version": "1.0.0",
   "description": "Pi Desktop V2 主模块（ArkWeb 渲染 + 进程内 Node 编排）",
   "main": "",
   "author": "fellow99",

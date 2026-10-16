@@ -1,0 +1,36 @@
+{
+  "string": [
+    {
+      "name": "inherit_parent_permission",
+      "value": "Used so the bundled, signed Node runtime inherits the parent process permission when it is spawned"
+    },
+    {
+      "name": "ignore_library_validation",
+      "value": "Used to load the bundled, signed Node runtime libraries and skip library validation"
+    },
+    {
+      "name": "exempt_anonymous_executable_memory",
+      "value": "Used so the bundled, signed Node runtime can allocate anonymous executable memory for JIT"
+    },
+    {
+      "name": "access_pasteboard",
+      "value": "Used to paste clipboard text or images into the chat input box"
+    },
+    {
+      "name": "download_dir",
+      "value": "Used to open or save files in the Downloads folder from the in-app file picker"
+    },
+    {
+      "name": "documents_dir",
+      "value": "Used to open or save files in the Documents folder from the in-app file picker"
+    },
+    {
+      "name": "desktop_dir",
+      "value": "Used to open or save files in the Desktop folder from the in-app file picker"
+    },
+    {
+      "name": "screen_capture",
+      "value": "Used for the in-app screenshot feature"
+    }
+  ]
+}

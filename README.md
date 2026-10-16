@@ -42,12 +42,18 @@ cmd //c "D:\oh-workspace\command-line-tools\bin\hvigorw.bat assembleHap --mode m
 #       没有签名材料则产出未签名包
 ```
 
-## 装机前必须补的两件事
+## 装机前必须知道的两件事
 
 | # | 事项 | 说明 |
 | --- | --- | --- |
-| 1 | **调试签名** | 在 DevEco 里为 `org.fellow99.pi.PiDesktopArk` 生成（证书与包名绑定，不能复用探针的），把值填进 `signing.debug.local.json` |
-| 2 | **JIT 的 ACL** | `ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY` 按本包名申请，并在 `entry/src/main/module.json5` 里取消注释 + 重建发布 Profile。临时验证可用「试用调试 Profile」；**没有 ACL 时给 Node 传 `--jitless`**（代价：WebAssembly 全废） |
+| 1 | **调试签名** | 已在 DevEco 为 `org.fellow99.pi.PiDesktopArk` 生成（证书与包名绑定）。材料写在 `build-profile.json5` 的 `signingConfigs` 里；也可改用 `signing.debug.local.json` + 环境变量覆盖 |
+| 2 | **JIT 的 ACL** | 声明面已配好（与 `pi-desktop-hos` 逐项一致：**24 项 requestPermissions + 2 项 definePermissions + `taskKeeping`**）。⚠️ **但 Profile 不含 ACL 时装机会被拒**（实测 `9568289 / PermissionName: ohos.permission.READ_PASTEBOARD`）——详见 [`docs/ACL配置.md`](docs/ACL配置.md)，那里给了「走 ACL」与「获批前先跑通」两条路径 |
+
+> **签名材料与 git**：DevEco 的「自动生成签名」会把证书路径与**本机加密口令**直接写进
+> `build-profile.json5`（该文件本身入库，所以会表现为**本地未提交改动** —— 请勿把它提交进仓库）。
+> `hvigorfile.ts` 不会覆盖它：只有提供 `signing.<mode>.local.json` 或证书环境变量时才注入自己的材料，
+> 否则如实使用 `build-profile.json5` 里的配置（并补上 `products[].signingConfig` 指针 —— 少了这个指针，
+> 即便材料在也**静默产出未签名包**）。
 
 ## 运行时状态与被观测的事实
 

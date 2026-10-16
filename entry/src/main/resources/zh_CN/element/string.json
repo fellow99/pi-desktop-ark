@@ -1,0 +1,36 @@
+{
+  "string": [
+    {
+      "name": "inherit_parent_permission",
+      "value": "用于让随包签名 Node 运行时在拉起时继承父进程权限"
+    },
+    {
+      "name": "ignore_library_validation",
+      "value": "用于加载随包签名的 Node 运行时动态库并跳过库校验"
+    },
+    {
+      "name": "exempt_anonymous_executable_memory",
+      "value": "用于让随包签名的 Node 运行时申请匿名可执行内存（JIT）"
+    },
+    {
+      "name": "access_pasteboard",
+      "value": "用于将剪贴板中的文本或图片粘贴到对话输入框"
+    },
+    {
+      "name": "download_dir",
+      "value": "用于在应用内文件选择器中直接读取或保存下载目录中的文件"
+    },
+    {
+      "name": "documents_dir",
+      "value": "用于在应用内文件选择器中直接读取或保存文档目录中的文件"
+    },
+    {
+      "name": "desktop_dir",
+      "value": "用于在应用内文件选择器中直接读取或保存桌面目录中的文件"
+    },
+    {
+      "name": "screen_capture",
+      "value": "用于应用内截图功能"
+    }
+  ]
+}

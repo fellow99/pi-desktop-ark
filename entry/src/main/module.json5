@@ -20,6 +20,11 @@
         "label": "$string:EntryAbility_label",
         "startWindowIcon": "$media:startIcon",
         "startWindowBackground": "$color:start_window_background",
+        // 长时任务（配合 ohos.permission.KEEP_BACKGROUND_RUNNING）：
+        // 与 pi-desktop-hos 的 electron 模块同口径 —— agent 长任务不被挂起。
+        "backgroundModes": [
+          "taskKeeping"
+        ],
         "exported": true,
         "skills": [
           {
@@ -33,30 +38,129 @@
         ]
       }
     ],
+    // ────────────────────────────────────────────────────────────────────────
+    // 权限声明面：与 pi-desktop-hos 逐项一致（来源：web_engine/src/main/module.json5
+    // 的 23 项 + electron/src/main/module.json5 的 KEEP_BACKGROUND_RUNNING）。
+    // 判定依据见 pi-desktop-hos/docs/ACL申请清单.md：
+    //   · 【ACL】= 受限权限（provisionEnable=true 且 level ∈ {system_basic, system_core}），
+    //     必须按本包名向华为申请，且**获批后写进发布 Profile**（Profile 变了要重建）；
+    //   · 其余为**开放权限**（provisionEnable=false 或 level=normal），声明即生效
+    //     （user_grant 的项在运行期首次访问时弹窗）。
+    // 本包名 org.fellow99.pi.PiDesktopArk 已按同一清单提交 ACL 申请。
+    // ────────────────────────────────────────────────────────────────────────
     "requestPermissions": [
-      // ── 系统权限（system_grant，声明即生效）──
+      { "name": "ohos.permission.INTERNET" },
+      { "name": "ohos.permission.GET_NETWORK_INFO" },
+      { "name": "ohos.permission.ACCESS_CERT_MANAGER" },
+      { "name": "ohos.permission.RUNNING_LOCK" },
+      { "name": "ohos.permission.PRINT" },
+      { "name": "ohos.permission.PREPARE_APP_TERMINATE" },
+      { "name": "ohos.permission.ACCESS_BIOMETRIC" },
+      { "name": "ohos.permission.FILE_ACCESS_PERSIST" },
+      { "name": "ohos.permission.PRIVACY_WINDOW" },
+      { "name": "ohos.permission.WINDOW_TOPMOST" },
+      // 【ACL 1/3 · 关键路径】内置 Node/V8 的 JIT 必需；无它 V8 走 JIT 即 SIGTRAP
+      //（探针实测：声明 EXEMPT_ANONYMOUS_EXECUTABLE_MEMORY 等开放权限**不能**替代）
+      { "name": "ohos.permission.KEEP_BACKGROUND_RUNNING" },
+      { "name": "ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY" },
+      // 随包 Node 运行时继承父进程权限
       {
-        "name": "ohos.permission.INTERNET"
+        "name": "ohos.permission.INHERIT_PARENT_PERMISSION",
+        "reason": "$string:inherit_parent_permission",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      // 加载随包签名的原生库（libnode.so / libnode_bridge.so）时跳过库校验
+      {
+        "name": "ohos.permission.kernel.IGNORE_LIBRARY_VALIDATION",
+        "reason": "$string:ignore_library_validation",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      // 随包运行时申请匿名可执行内存（JIT）
+      {
+        "name": "ohos.permission.kernel.EXEMPT_ANONYMOUS_EXECUTABLE_MEMORY",
+        "reason": "$string:exempt_anonymous_executable_memory",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      { "name": "ohos.permission.GYROSCOPE" },
+      { "name": "ohos.permission.ACCELEROMETER" },
+      { "name": "ohos.permission.GET_FILE_ICON" },
+      { "name": "ohos.permission.LOCK_WINDOW_CURSOR" },
+      // 【ACL 2/3】剪贴板粘贴到对话输入框（user_grant，运行期弹窗）
+      {
+        "name": "ohos.permission.READ_PASTEBOARD",
+        "reason": "$string:access_pasteboard",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
       },
       {
-        "name": "ohos.permission.GET_NETWORK_INFO"
+        "name": "ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY",
+        "reason": "$string:download_dir",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
       },
-      // ── JIT 必需的 ACL（工程规划 §4.7 / 附录 F）──
-      // ⚠️ 该权限属**受限权限**：必须按本包名（org.fellow99.pi.PiDesktopArk）向华为申请，
-      //    并在**发布 Profile** 里包含它；Profile 未包含时声明它会导致装机被拒。
-      //    拿到 ACL 后取消下面两行注释并重建 Profile；临时验证可用「试用调试 Profile」。
-      //    没有该 ACL 时的兜底是给 Node 加 `--jitless`（代价：WebAssembly 全废）。
-      // {
-      //   "name": "ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY"
-      // },
-      // 探针工程实测：这两条「开放权限」**不能**替代上面的 ACL（仍 SIGTRAP），
-      // 保留在此仅为记录，默认不声明：
-      // {
-      //   "name": "ohos.permission.kernel.EXEMPT_ANONYMOUS_EXECUTABLE_MEMORY"
-      // },
-      // {
-      //   "name": "ohos.permission.kernel.IGNORE_LIBRARY_VALIDATION"
-      // }
+      {
+        "name": "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",
+        "reason": "$string:documents_dir",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      // 【ACL 3/3】工作目录可能位于桌面目录时由 agent 文件工具直写（user_grant）
+      {
+        "name": "ohos.permission.READ_WRITE_DESKTOP_DIRECTORY",
+        "reason": "$string:desktop_dir",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.CUSTOM_SCREEN_CAPTURE",
+        "reason": "$string:screen_capture",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      }
+    ],
+    // 与 requestPermissions **成对出现**（pi-desktop-hos 的口径：受限权限两处都要有）
+    "definePermissions": [
+      {
+        "name": "ohos.permission.LOCK_WINDOW_CURSOR"
+      },
+      {
+        "name": "ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY"
+      }
     ]
   }
 }
