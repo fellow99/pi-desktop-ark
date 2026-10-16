@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
-import { NodeRuntime, NodeStartResult, NodeState } from '@fellow99/node-bridge';
-import { appUrl, BOOTSTRAP_REL_PATH, DEFAULT_PORT, Log, PROBE_ATTEMPTS, PROBE_INTERVAL_MS } from '../common/Constants';
+import { Env, NodeRuntime, NodeStartResult, NodeState } from '@fellow99/node-bridge';
+import { appUrl, DEFAULT_PORT, Log, PAYLOAD_DIR, PAYLOAD_ENTRY, PROBE_ATTEMPTS, PROBE_INTERVAL_MS } from '../common/Constants';
 
 /** 界面上看到的状态机（与库的运行时状态区分：这里是「整机可用性」） */
 export enum UIState {
@@ -63,7 +63,8 @@ export class PiDesktopRuntime {
     this.state = UIState.LAUNCHING;
     this.lastError = '';
 
-    const scriptPath: string = context.filesDir + '/' + BOOTSTRAP_REL_PATH;
+    // ① 载荷物化：把随包 rawfile 写到沙箱（Node 读不到包内只读条目，notes 硬约束 ④）
+    const scriptPath: string = this.preparePayload(context);
     Log.info('launch: flags=' + flags + ' script=' + scriptPath);
 
     // ① + ②：投递启动（幂等保护在库内；Node 只能启动一次）
@@ -121,6 +122,28 @@ export class PiDesktopRuntime {
     }
   }
 
+
+  /**
+   * 把随包载荷物化到沙箱并返回**入口脚本的绝对路径**。
+   *
+   * 为什么必须物化（notes 硬约束 ④「谁写谁读」）：Node 读得到 ArkTS 写进 `filesDir` 的文件，
+   * 读不到安装包内的只读条目。骨架期载荷是 `rawfile/selfcheck.js`（环境自检 + `/facts` 探活）；
+   * Phase 1 换成 pi-web 产物时改为 `resources/resfile/pi-web/` **只读直读、零解压**（工程规划 §5.5）。
+   *
+   * 失败不抛：打印日志后仍返回目标路径，让 Node 侧用「找不到模块」如实报错（比在这里吞掉更好定位）。
+   */
+  private preparePayload(context: common.UIAbilityContext): string {
+    const destDir: string = context.filesDir + '/' + PAYLOAD_DIR;
+    const dest: string = destDir + '/' + PAYLOAD_ENTRY;
+    try {
+      Env.ensureDir(destDir);
+      Env.materializeRawfile(context.resourceManager, PAYLOAD_ENTRY, dest);
+      Log.info('载荷已物化：' + dest);
+    } catch (e) {
+      Log.error('载荷物化失败（Node 将按原路径启动并在 node.log 报错）：' + JSON.stringify(e));
+    }
+    return dest;
+  }
   private static sleep(ms: number): Promise<void> {
     return new Promise<void>((resolve: () => void) => {
       setTimeout(() => {

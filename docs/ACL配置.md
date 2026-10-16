@@ -23,9 +23,9 @@
 > 探针实测（`ohos-node-bridge/docs/000-工程规划.md` §D.8）：声明 `kernel.EXEMPT_ANONYMOUS_EXECUTABLE_MEMORY`
 > 等**开放权限不能替代**第 1 项 —— 仍 SIGTRAP。故第 1 项是刚性前置。
 
-## 2. ⚠️ 实测：Profile 不含 ACL 时**装机直接被拒**（2026-10-16，HAD-W32）
+## 2. 装机与授权：两次实测（2026-10-16，HAD-W32）
 
-声明面配好、HAP 已用 DevEco 调试证书签名后，装机结果：
+### 2.1 第一次：Profile 不含 ACL ⇒ **装机直接被拒**
 
 ```
 hdc install -r entry-default-signed.hap
@@ -34,27 +34,58 @@ hdc install -r entry-default-signed.hap
   PermissionName: ohos.permission.READ_PASTEBOARD
 ```
 
-同时检查调试 Profile（`~/.ohos/config/default_pi-desktop-ark_*.p7b`）：`type = debug`，
-**不含任何权限项**（0 项）——即**声明面 ≠ 授权面**，安装时的授权校验以 **Profile** 为准。
+排查：解调试 Profile（`~/.ohos/config/default_pi-desktop-ark_*.p7b`）→ `type=debug` 且**权限项为 0**。
+⇒ **声明面 ≠ 授权面**，安装时的授权校验以 **Profile** 为准。这条把 `ACL申请清单.md` §3.1 的
+「⬜ 待实测的已知风险」**从待办变成结论**：Profile 里没有 ACL 时，**留着声明就装不上**
+（`hdc install -r` 覆盖安装也救不了 —— 已实测）。
 
-> 这条把 `ACL申请清单.md` §3.1 里那条「⬜ 待实测的已知风险」**从待办变成结论**：
-> 在 Profile 拿到 ACL 之前，**留着声明就装不上**（`hdc install -r` 覆盖安装也救不了 —— 已实测）。
+### 2.2 第二次：重新生成签名（Profile 含 ACL）⇒ **装机成功、JIT 生效**
 
-### 2.1 解法（二选一，都不需要改代码）
+2026-10-16 21:44 重新生成的 Profile 带 **6 项授权**（3 项 ACL 全在）：
 
-| 路径 | 做法 |
+```
+ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY   ← JIT 关键项
+ohos.permission.READ_PASTEBOARD                     ← ACL
+ohos.permission.READ_WRITE_DESKTOP_DIRECTORY        ← ACL
+ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY
+ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY
+ohos.permission.FILE_ACCESS_PERSIST
+```
+
+随后 `hdc install -r` → `install bundle successfully.`；启动（**不带 `--jitless`**）后 `/facts`：
+
+| 判据 | 结果 |
 | --- | --- |
-| **A. 走 ACL（目标态）** | AGC 获批后**重建 Profile**（Profile 与权限集合绑定；ACL 变化必须重建），或在 AGC 申请**试用调试 Profile**（5 天 / 每应用最多 5 个，可含受限权限）；随后在 DevEco 重新生成签名材料（`File → Project Structure → Signing Configs`），再按 §3 复验 |
-| **B. 获批前先跑通其它链路** | 临时把 §1.1 的 3 项 ACL **注释掉**重新构建 → 可装机；此时必须给 Node 传 `--jitless`（代价：**WebAssembly 全废**、热循环约 300 ms/5 轮）。**验完把这 3 项恢复** |
+| Node | `v24.2.0` / `platform openharmony` / `modules 137` |
+| **JIT（ACL 生效）** | ✅ `wasm.available=true`、`wasm.validate=true`、`execArgv=['--no-verify-heap']` |
+| 性能 | ✅ 热循环 **6–9 ms / 2e6 次**（同型解释器基线约 59 ms/2e6）⇒ 约 **7–10×** |
+| 崩溃 | ✅ `hilog` 中 `Cpp Crash` **0 条**，应用进程（含 ArkWeb `:gpu`/`:render`）稳定存活 |
 
-## 3. 验收判据（ACL 生效后可证伪）
+> 完整证据（原始 JSON + 复现命令）：[`evidence/2026-10-16-acl-jit-verified.md`](evidence/2026-10-16-acl-jit-verified.md)
 
-装机后（`aa start -a EntryAbility -b org.fellow99.pi.PiDesktopArk --ps probeFlags "--no-verify-heap"`）：
+### 2.3 复验步骤（Profile 变更后必做）
 
-1. 不出现 `Cpp Crash`（无 ACL 时必现 `CRASH sig=5 si_addr==pc`）；
-2. `<filesDir>/payload/node.log` 出现 `(target MAGLEV)` 之类的编译日志；
-3. 自检接口 `curl -s http://127.0.0.1:15577/facts`（或 pi-web 探活）返回 200；
-4. 热循环耗时显著低于 300 ms/5 轮（解释器基线）。
+1. 重新生成签名材料（DevEco → `File → Project Structure → Signing Configs`）；
+2. `hdc install -r entry/build/default/outputs/default/entry-default-signed.hap` —— **能装上**即说明 Profile 授权面已就位；
+3. `hdc shell "aa force-stop org.fellow99.test.NodeProbe"`（**先腾出 15577**，见 §3.1），再
+   `hdc shell "aa start -a EntryAbility -b org.fellow99.pi.PiDesktopArk --ps probeFlags '--no-verify-heap'"`；
+4. `hdc fport tcp:15577 tcp:15577 && curl -s http://127.0.0.1:15577/facts` —— 看 `wasm.validate` 与 `hotloop_ms_2e6`。
+
+## 3. 两条实测设计规则
+
+### 3.1 端口冲突会把**整个 App 进程**带走（⇒ 随机端口 + 单实例）
+
+实测：15577 被别的应用占着时启动本应用 → `Cpp Crash`（进程消失，崩溃栈里有 `libnode_bridge.so`）；
+腾出端口后同一构建完全正常。链路：载荷 `server.listen()` 抛 `EADDRINUSE` → **进程内 Node 的未捕获异常**
+→ 整个 App 进程 abort（进程内 Node 没有优雅退出路径）。
+⇒ 工程规划 §5.10 ⑫「默认随机端口 + 单实例」由此**从建议变为硬约束**。
+
+### 3.2 载荷必须自装兜底异常，且日志不能只靠 stdout
+
+载荷应装 `process.on('uncaughtException')` / `'unhandledRejection'` 并把错误写进**自己的**日志
+（如 `payload/app.log`）；否则任何未捕获异常都是应用级事故（见 §3.1）。
+附带发现：`node_bridge.c` 的 `dup2` 会把 **ArkWeb/Chromium 的原生输出**也写进同一份 `node.log`（噪声很大），
+Phase 1 按 §5.10 ⑤ 改成「pipe + 独立 reader 线程排空」并分离日志通道。
 
 ## 4. 与运行时投放的关系
 

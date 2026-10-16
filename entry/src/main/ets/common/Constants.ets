@@ -6,8 +6,16 @@ const TAG = 'PI_DESKTOP_ARK';
 /** 与 `pi-web` / 探针一致的默认端口（探针实测：`hdc fport` + `curl` 可达） */
 export const DEFAULT_PORT: number = 15577;
 
-/** 沙箱内入口脚本相对 HOME 的路径 */
-export const BOOTSTRAP_REL_PATH: string = 'payload/bootstrap.js';
+/** 沙箱内载荷目录（相对 HOME） */
+export const PAYLOAD_DIR: string = 'payload';
+
+/**
+ * 骨架期载荷入口：**rawfile 名 = 落盘后的文件名**。
+ * 随包放 `entry/src/main/resources/rawfile/selfcheck.js`，启动时由 ArkTS 写到
+ * `<filesDir>/payload/selfcheck.js`（「谁写谁读」，notes 硬约束 ④）。
+ * Phase 1 换成 pi-web 产物（`resources/resfile/` 只读直读，工程规划 §5.5）。
+ */
+export const PAYLOAD_ENTRY: string = 'selfcheck.js';
 
 /** 探活参数：退避重试（先例实测：一次探活就下结论会误判首启慢） */
 export const PROBE_ATTEMPTS: number = 20;
