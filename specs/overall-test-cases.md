@@ -33,7 +33,7 @@
 | `TC-ARK-004` | 启动无崩溃 | L1/L2 | 101 | `hilog` 中 `Cpp Crash` **0 命中**；应用与渲染子进程存活 | `hdc shell hilog -x \| grep -E "Cpp Crash\|org.fellow99.pi"` | ✅ 通过 |
 | `TC-ARK-005` | JIT/WASM 档位 | L3 | 101 | `/facts`：`wasm.available=true` 且 `wasm.validate=true`；热循环 **6–9 ms/2e6**；`execArgv=['--no-verify-heap']` | `hdc fport tcp:15577 tcp:15577 && curl -s http://127.0.0.1:15577/facts` | ✅ 通过 |
 | `TC-ARK-006` | 日志读回通道 | L2 | 101 | `curl /log` 返回非空文本且含库/载荷输出行（⚠️ 同时会混入 `arkweb/chromium_ext/…` 噪声，属已知） | 同上的 `/log` | ⚠️ 通过（噪声待库侧修复：⑱） |
-| `TC-ARK-007` | 包体与压缩方式 | L0/L4 | 102/107 | HAP 内 `.so` 与 `rawfile/resfile` 的 `compress_type` == 8；包体与本文件 §5 的预算一致 | `python -c "import zipfile;…"`（见 §5 实测脚本） | ⚠️ **现状不通过**：实测全为 `0（STORED）`，与规划附录 A 口径不符 ⇒ Phase 1/3 修复项 |
+| `TC-ARK-007` | 包体与压缩方式 | L0/L4 | 102/107 | HAP 内**原生库** `compress_type` == 8（DEFLATE）；包体与本文件 §5 的预算一致 | `python -c "import zipfile;…"`（见 §5 实测脚本） | ⚠️ **部分通过（2026-10-17 实测）**：三个 `.so` 全部 `compress_type=8` ✅（签名 HAP **46,031,244 B**，此前 129,535,202 B / 全 0）；`resources/rawfile`、`resources/resfile` 仍为 `0（STORED）`（不随 `compressNativeLibs` 压缩）⇒ 规划附录 A 的「全部为 8」需按实测修订或说明 |
 | `TC-ARK-008` | 单实例 | L2 | 101 | 二次启动后 `aa dump -l` 只出现一个该包名实例；第二个 `aa start` 不产生新窗口 | `hdc shell "aa start -a EntryAbility -b org.fellow99.pi.PiDesktopArk"` ×2 + `aa dump -l` | ⬜ 待执行（Phase 1；现状 `launchType` 未显式声明） |
 | `TC-ARK-009` | 端口冲突下的可见失败 | L2 | 101 | 占用候选端口后启动：界面出现**可截图的失败态**，且 `hilog` 之外**没有**应用进程静默消失 | 先起占端口的进程 → `aa start` → 截图 | ⚠️ **现状不通过**（✅ 已实测会整进程 abort）⇒ Phase 1 随机端口 + 载荷兜底 |
 | `TC-ARK-010` | 首启耗时 | L3 | 102/103 | 冷启动到「可输入消息」≤ 15 s；首启与二次启动耗时差可测（幂等跳过生效） | 真机计时 + `hilog` 阶段时间戳 | ⬜ 待执行（Phase 1，O6） |
@@ -200,9 +200,9 @@ hdc shell "aa dump -l"                                   # 前台确认（截图
 | B4 | 热循环 | **6–9 ms / 2e6 次**（解释器基线约 59 ms/2e6 ⇒ 约 7–10×） | `curl /facts` 的 `hotloop_ms_2e6` |
 | B5 | 崩溃 | `hilog` 中 `Cpp Crash` **0 命中**；应用 + 渲染子进程存活 | `hilog` |
 | B6 | 沙箱路径 | `homedir=/data/storage/el2/base/haps/entry/files`、`tmpdir=…/files/tmp`、`cpus=0`、`netifaces=[lo,wlan0,ancowlan0]` | `curl /facts` |
-| B7 | 签名 HAP | `entry-default-signed.hap` **129,347,874 B**（未签名 128,255,687 B）；`libs/arm64-v8a/libnode.so` 126,809,264 B | `ls -l` + HAP 清单 |
+| B7 | 签名 HAP | `entry-default-signed.hap` **46,031,244 B**（压缩开关落地后实测，2026-10-17）；`libs/arm64-v8a/libnode.so` 126,809,264 B（HAP 内为 DEFLATE 存储） | `ls -l` + HAP 清单 |
 | B8 | **装机失败样例** | `error: failed to install bundle. code:9568289 / error: install failed due to grant request permissions failed. PermissionName: ohos.permission.READ_PASTEBOARD` | `hdc install -r`（Profile 无 ACL 时） |
-| B9 | ⚠️ HAP 内压缩 | `libs/*.so`、`resources/rawfile/*`、`resources/resfile/*` 的 `compress_type` **全为 0（STORED）** | `python -c "import zipfile;…"` |
+| B9 | ✅ **已修（2026-10-17，B4/R2）** HAP 内压缩 | `libs/*.so` 三个全部 **`compress_type=8`（DEFLATE）**：`libc++_shared.so` 1,262,504 / `libnode.so` 126,809,264 / `libnode_bridge.so` 28,040；`resources/rawfile/*`、`resources/resfile/*` 仍为 `0`（STORED） | `python -c "import zipfile;…"`（见下行脚本；命令与输出见 `overall-data-model.md` §6.2） |
 | B10 | 端口冲突后果 | 15577 被占 ⇒ 载荷 `EADDRINUSE` ⇒ **整个 App 进程 abort**（`Cpp Crash`，栈含 `libnode_bridge.so`） | `hilog` + 截图 |
 | B11 | `/log` 噪声 | 16 KB 返回里大部分是 `arkweb/chromium_ext/…` 原生输出 | `curl /log` |
 | B12 | `spawn` 可用性 | `data`/`exit`/`close` 三事件齐全、无僵尸（🔶 库 §D.8 与本机探针） | 探针 `/facts` |

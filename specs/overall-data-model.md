@@ -232,23 +232,42 @@ entry/src/main/resources/                    # 随包（只读）
 | `pi-dist` → `tar.gz` | **156,592,393 B**（≈149 MiB） | `stat` |
 | 库产物 `libnode.so` | 126,809,264 B（部署名；上游名 `libnode-arm64.so`；SHA-256 `3019bf5f…51a1`） | `entry/libs/arm64-v8a/` |
 | 库产物 `libc++_shared.so` | 1,262,504 B（取自 ohos-sdk） | 同上 |
-| 库 HAR | 441,353 B（含 `libnode_bridge.so` 14,208 B） | `libs/@fellow99/node-bridge/` |
-| 签名 HAP（**当前不带载荷**） | **129,347,874 B**（未签名 128,255,687 B） | `entry/build/default/outputs/default/` |
+| 库 HAR | **479,190 B**（2026-10-17 本机重建；含 `package/libs/arm64-v8a/libc++_shared.so` 1,262,504 B 与 `libnode_bridge.so` 28,040 B；**不含** `libnode.so`） | `library/build/default/outputs/default/library.har`（`tar -tzvf`） |
+| 签名 HAP（含载荷） | **46,031,244 B**（2026-10-17 实测；压缩开关落地前为 129,535,202 B / 全条目 STORED） | `entry/build/default/outputs/default/entry-default-signed.hap` |
 
-### 6.2 HAP 内压缩状态（✅ 实测，⚠️ 与规划口径不一致）
+### 6.2 HAP 内压缩状态（✅ 实测 2026-10-17；B4/R2 已修）
+
+**产生命令**（`pi-desktop-ark/` 下执行）：
+
+```bash
+python -c "import zipfile,os;z=zipfile.ZipFile('entry/build/default/outputs/default/entry-default-signed.hap');print('hap size',os.path.getsize('entry/build/default/outputs/default/entry-default-signed.hap'));print([(i.filename,i.file_size,i.compress_type) for i in z.infolist() if i.filename.endswith('.so') or 'resfile' in i.filename])"
+```
+
+实测输出（原文）：
+
+```
+hap size 46031244
+resources/rawfile/boot.html 1270 0
+resources/rawfile/bootstrap.js 17044 0
+resources/rawfile/error.html 4114 0
+resources/rawfile/host.js 7301 0
+resources/rawfile/lib/tar-extract.js 13370 0
+resources/rawfile/selfcheck.js 3022 0
+resources/resfile/pi-web/README.md 944 0
+libs/arm64-v8a/libc++_shared.so 1262504 8
+libs/arm64-v8a/libnode.so 126809264 8
+libs/arm64-v8a/libnode_bridge.so 28040 8
+```
 
 | HAP 内条目 | `file_size` | `compress_type` |
 |---|---|---|
-| `libs/arm64-v8a/libc++_shared.so` | 1,262,504 | **0（STORED）** |
-| `libs/arm64-v8a/libnode.so` | 126,809,264 | **0（STORED）** |
-| `libs/arm64-v8a/libnode_bridge.so` | 14,208 | **0（STORED）** |
-| `resources/rawfile/{boot.html,selfcheck.js}`、`resources/resfile/pi-web/README.md` | 1,270 / 3,022 / 944 | **0（STORED）** |
+| `libs/arm64-v8a/libc++_shared.so` | 1,262,504 | **8（DEFLATE）✅** |
+| `libs/arm64-v8a/libnode.so` | 126,809,264 | **8（DEFLATE）✅** |
+| `libs/arm64-v8a/libnode_bridge.so` | 28,040 | **8（DEFLATE）✅** |
+| `resources/rawfile/{boot.html,bootstrap.js,error.html,host.js,lib/tar-extract.js,selfcheck.js}`、`resources/resfile/pi-web/README.md` | 1,270 / 17,044 / 4,114 / 7,301 / 13,370 / 3,022 / 944 | **0（STORED）**（资源条目不随 `compressNativeLibs` 压缩） |
 
-⚠️ 规划附录 A 的核对口径写的是「`compress_type` **应为 8（DEFLATE）**」；当前 debug 产物**全是 0（未压缩）**，
-且 HAP 体积 ≈ 各条目之和（126.8 MB 的 `.so` 几乎未压）。⇒ Phase 1/3 必须：
-① 显式配置载荷压缩（库 §5.10 差分清单里点名的 `compressNativeLibs`）；
-② 重新记录包体与装机时长；
-③ 上架材料按**实测**写，不按预期写。
+✅ **已修**：消费方 `entry/src/main/module.json5` 在 module 级声明 `compressNativeLibs: true` + `extractNativeLibs: true`；三个 `.so` 全部 DEFLATE，签名 HAP 从 **129,535,202 B → 46,031,244 B**。
+⚠️ 规划附录 A 的核对口径写「`compress_type` **应为 8（DEFLATE）**」——按实测应限定为「**原生库**为 8」：`rawfile`/`resfile` 仍为 0（属资源打包行为，需在材料中按实测说明或修订规划口径）。
 
 ### 6.3 四项裁剪（⬜ Phase 1，现值与预期收益）
 

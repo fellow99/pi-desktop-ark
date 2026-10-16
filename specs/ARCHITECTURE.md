@@ -225,7 +225,7 @@
 | 合规项 | 架构上的落点 | 现状 |
 |---|---|---|
 | **G1 用 ArkWeb 渲染** | L4 就是 ArkWeb 渲染进程；L1 用 `Web` 组件承载；**没有**第二套渲染内核 | ✅ 形态成立 |
-| **G3 包内无第三方浏览器内核** | 包内原生件只有 `libnode.so`（Node 运行时）+ `libnode_bridge.so`（库引导件）+ `libc++_shared.so` | ✅ 形态成立（⬜ Phase 3 出产物核对：HAP 内 `libs/` 清单 + `compress_type` 检查） |
+| **G3 包内无第三方浏览器内核** | 包内原生件只有 `libnode.so`（Node 运行时）+ `libnode_bridge.so`（库引导件）+ `libc++_shared.so` | ✅ 形态成立；✅ Phase 3 产物核对已做（2026-10-17）：HAP 内 `libs/` 清单 3 个 `.so` + `compress_type` 全为 `8`（DEFLATE），签名 HAP 46,031,244 B |
 | **G2 无浏览器语义** | `module.json5` 的 `skills` 只有桌面入口，**没有** `browsable`/`viewData` | ✅ |
 | **G9 PoC 清理** | 上架前移除 `--inspect`、诊断开关、`selfcheck` 载荷的 `/facts`、`/log` 调试端点 | ⬜ Phase 3（这些端点目前是**唯一**可读回的取证通道，Phase 1–2 必须保留） |
 | **G11 不绕行** | 架构上不存在绕过签名/可执行内存控制的组件（依赖 ACL 正路） | ✅ |

@@ -90,5 +90,5 @@
 | `pi-web` 上游补丁（预计 0–2 条：`P-ark-1` 优先不补 / `P-ark-2` 沿用旧壳已验证补丁） | Phase 1–2 | 规划 §9 |
 | 目录选择器最优形态定稿（O8）与 MCP stdio 真机复测（O5） | Phase 2 | 规划 §12.2 O5/O8；`TC-104-003`、`TC-106-001` |
 | 优雅关停联调（库 `shutdown()` 到位后）与单实例 `launchType` 声明 | Phase 1–2 | 规划 §5 第 13/16 条；`101/plan.md` §9 第 2/3 项 |
-| HAP 内 `.so` 与 `rawfile/resfile` 压缩方式实测为 `0（STORED）`，与规划附录 A 的 `8（DEFLATE）` 口径不符 ⇒ 修复或改口径 | Phase 1 / 3 | 规划 附录 A；`overall-data-model.md` §6.2、`TC-ARK-007` |
+| ✅ **已修（2026-10-17，B4/R2）**：HAP 内三个 `.so` 实测为 `8（DEFLATE）`（签名 HAP 46,031,244 B；此前 129,535,202 B / 全 `0（STORED）`）；`rawfile/resfile` 仍为 `0`（资源条目不随 `compressNativeLibs`） | Phase 3 完成 | 规划 附录 A；`overall-data-model.md` §6.2（含命令与原始输出）、`TC-ARK-007` |
 | 回归四件套基线（产物 SHA-256 / 首启耗时 / 包体与压缩方式 / `/facts` 四字段） | Phase 4 | 规划 §11 Phase 4；`TC-ARK-014` |
