@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "Pi Desktop V2 主模块"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Pi Desktop V2"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Pi Desktop V2"
+    }
+  ]
+}

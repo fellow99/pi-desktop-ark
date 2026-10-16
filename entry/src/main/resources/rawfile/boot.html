@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pi Desktop V2 — 启动中</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0; height: 100vh; display: flex; align-items: center; justify-content: center;
+      font: 14px/1.6 -apple-system, "HarmonyOS Sans", "Segoe UI", sans-serif;
+      background: #fafafa; color: #333;
+    }
+    .box { text-align: center; max-width: 30rem; padding: 2rem; }
+    h1 { font-size: 1.1rem; font-weight: 600; margin: 0 0 .75rem; }
+    p { color: #777; margin: .25rem 0; }
+    .bar { margin-top: 1.25rem; height: 3px; background: #e5e5e5; overflow: hidden; border-radius: 2px; }
+    .bar i { display: block; width: 40%; height: 100%; background: #4a8cff; animation: slide 1.1s ease-in-out infinite; }
+    @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Pi Desktop V2</h1>
+    <p>正在启动本地运行时（Node / pi-web）…</p>
+    <div class="bar"><i></i></div>
+    <p style="margin-top:1rem;font-size:12px">服务就绪后本页会自动切到 127.0.0.1 的界面</p>
+  </div>
+</body>
+</html>

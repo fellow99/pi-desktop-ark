@@ -1,0 +1,17 @@
+{
+  "apiType": "stageMode",
+  "buildOption": {
+    // 本模块**不编译 C++**：引导件（libnode_bridge.so）随 @fellow99/node-bridge HAR 提供。
+    // 预置原生库只放 arm64-v8a（entry/libs/arm64-v8a/，由 scripts/provision-runtime.sh 投放），
+    // 所以不需要 ABI 过滤 —— module 级 nativeLib 也不接受 abiFilters（它只吃
+    // debugSymbol / filter / headerPath / collectAllLibs / librariesInfo 等键，写错会 schema 报错）。
+    "nativeLib": {
+      "collectAllLibs": true
+    }
+  },
+  "targets": [
+    {
+      "name": "default"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+# ── 构建产物 ──
+/**/build/
+/**/.hvigor/
+/**/.cxx/
+/**/.preview/
+/.idea/
+*.iml
+oh_modules/
+/**/oh_modules/
+
+# ── 本机签名材料（DevEco 生成，**勿入库**）──
+signing.*.local.json
+*.p12
+*.p7b
+*.cer
+
+# ── 运行时二进制 ──
+# libnode.so（约 121 MB）+ libc++_shared.so 由 scripts/provision-runtime.sh 投放（不入库）
+entry/libs/
+# ── 本地依赖（构建产物，不入库）──
+# @fellow99/node-bridge 的 HAR 由 scripts/build-bridge-har.sh 生成
+libs/**/*.har
+entry/src/main/resources/resfile/pi-web/*
+!entry/src/main/resources/resfile/pi-web/README.md
+*.hap

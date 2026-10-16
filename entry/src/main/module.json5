@@ -1,0 +1,62 @@
+{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "description": "$string:module_desc",
+    "mainElement": "EntryAbility",
+    "deviceTypes": [
+      "2in1",
+      "tablet"
+    ],
+    "deliveryWithInstall": true,
+    "installationFree": false,
+    "pages": "$profile:main_pages",
+    "abilities": [
+      {
+        "name": "EntryAbility",
+        "srcEntry": "./ets/entryability/EntryAbility.ets",
+        "description": "$string:EntryAbility_desc",
+        "icon": "$media:icon",
+        "label": "$string:EntryAbility_label",
+        "startWindowIcon": "$media:startIcon",
+        "startWindowBackground": "$color:start_window_background",
+        "exported": true,
+        "skills": [
+          {
+            "entities": [
+              "entity.system.home"
+            ],
+            "actions": [
+              "action.system.home"
+            ]
+          }
+        ]
+      }
+    ],
+    "requestPermissions": [
+      // ── 系统权限（system_grant，声明即生效）──
+      {
+        "name": "ohos.permission.INTERNET"
+      },
+      {
+        "name": "ohos.permission.GET_NETWORK_INFO"
+      },
+      // ── JIT 必需的 ACL（工程规划 §4.7 / 附录 F）──
+      // ⚠️ 该权限属**受限权限**：必须按本包名（org.fellow99.pi.PiDesktopArk）向华为申请，
+      //    并在**发布 Profile** 里包含它；Profile 未包含时声明它会导致装机被拒。
+      //    拿到 ACL 后取消下面两行注释并重建 Profile；临时验证可用「试用调试 Profile」。
+      //    没有该 ACL 时的兜底是给 Node 加 `--jitless`（代价：WebAssembly 全废）。
+      // {
+      //   "name": "ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY"
+      // },
+      // 探针工程实测：这两条「开放权限」**不能**替代上面的 ACL（仍 SIGTRAP），
+      // 保留在此仅为记录，默认不声明：
+      // {
+      //   "name": "ohos.permission.kernel.EXEMPT_ANONYMOUS_EXECUTABLE_MEMORY"
+      // },
+      // {
+      //   "name": "ohos.permission.kernel.IGNORE_LIBRARY_VALIDATION"
+      // }
+    ]
+  }
+}
