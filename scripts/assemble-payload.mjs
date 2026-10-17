@@ -98,7 +98,7 @@ const TAR_ROOT = 'pi-web';
  * `payload/README.md` 刻意不投放（文档不进载荷）。
  */
 const APP_PAYLOAD_DIR = path.join(PROJECT_ROOT, 'payload');
-const APP_PAYLOAD_ENTRIES = ['pi-web-launch.js', 'env.js', 'extensions', 'config'];
+const APP_PAYLOAD_ENTRIES = ['pi-web-launch.js', 'env.js', 'extensions', 'skills', 'config'];
 
 // ── 命令行解析 ────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
@@ -611,7 +611,8 @@ const DEFAULT_PATCH_DIR = path.join(PROJECT_ROOT, 'patches', PI_WEB_PATCH_TAG);
 const PI_WEB_PATCH_MARKERS = [
   { rel: '.next/server/app/api/terminal/route.js', marker: 'terminal.pty' },
   { rel: '.next/server/app/api/cwd/browse/route.js', marker: 'PI_HOS_ROOTS' },
-  { rel: '.next/server/app/api/cwd/validate/route.js', marker: 'pi-hos-sandbox-alias' }
+  { rel: '.next/server/app/api/cwd/validate/route.js', marker: 'pi-hos-sandbox-alias' },
+  { rel: '.next/server/app/api/sessions/[id]/export/route.js', marker: 'pi-hos-export-runtime-guard' }
 ];
 
 /** 补丁阶段的失败（main 捕获后 exit 2：这是「输入不满足」，不是脚本 bug） */

@@ -470,6 +470,93 @@ async function closeServer(reason) {
   }
 }
 
+// ── agent 资源物化（extensions / skills → <PI_CODING_AGENT_DIR>）─────────────────────
+/** 递归列出 `root` 下所有**文件的相对路径**（`/` 分隔，已排序；不含目录）。 */
+function listFilesDeep(root) {
+  const out = [];
+  const stack = [{ abs: root, rel: '' }];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(current.abs, { withFileTypes: true });
+    } catch (err) {
+      logWarn(`listFilesDeep 读取失败：${current.abs}（${describeError(err)}）`);
+      continue;
+    }
+    for (const entry of entries) {
+      const rel = current.rel ? `${current.rel}/${entry.name}` : entry.name;
+      const abs = path.join(current.abs, entry.name);
+      // 平台禁止 symlink（应用域 EACCES），出现也一律不跟随——只认真实文件/目录
+      if (entry.isDirectory()) stack.push({ abs, rel });
+      else if (entry.isFile()) out.push(rel);
+    }
+  }
+  out.sort();
+  return out;
+}
+
+/**
+ * 把随包的 `extensions/` 与 `skills/` **复制**到 `<PI_CODING_AGENT_DIR>`。
+ *
+ * 为什么必须做：pi **不会**从载荷目录加载扩展与技能 ——
+ *   · `discoverAndLoadExtensions` 只看 `<agentDir>/extensions` 与 `<cwd>/.pi/extensions`
+ *     （`pi-coding-agent/dist/core/extensions/loader.js`）；
+ *   · 技能只看 `<agentDir>/skills` 与 `<cwd>/.pi/skills`（`dist/core/resource-loader.js`）。
+ * 不做这一步的**真机现象**：同名顶替 `bash`/`grep`/`find` 与 `harmony-runtime-capabilities`
+ * 技能全部不生效——模型可用工具只剩 `read`/`write`/`edit`/`bash`，`find`/`grep` **根本不存在**
+ * （2026-10-17 实测，见 `docs/001-能力复刻评估.md` §K.9）。
+ *
+ * 纪律：① **幂等**——逐文件比对内容（不比 mtime：两个卷的时钟不可比），相同即跳过；
+ * ② **原子写**（临时文件 + `rename`），平台禁止 symlink，一律真拷贝；
+ * ③ **绝不抛**——物化失败只降级为「扩展/技能缺席」，不能拖垮主链路。
+ */
+function materializeAgentResources(payloadRoot) {
+  const agentDir = process.env.PI_CODING_AGENT_DIR;
+  if (!agentDir) {
+    logWarn('PI_CODING_AGENT_DIR 未设置：跳过 agent 资源物化（扩展与技能将缺席）');
+    return { copied: 0, skipped: 0 };
+  }
+  const pairs = [
+    { name: 'extensions', src: path.join(payloadRoot, 'extensions'), dest: path.join(agentDir, 'extensions') },
+    { name: 'skills', src: path.join(payloadRoot, 'skills'), dest: path.join(agentDir, 'skills') }
+  ];
+  let copied = 0;
+  let skipped = 0;
+  for (const pair of pairs) {
+    if (!fs.existsSync(pair.src)) {
+      logWarn(`agent 资源源目录不存在（${pair.name}）：${pair.src} —— 本次不物化这一类`);
+      continue;
+    }
+    for (const rel of listFilesDeep(pair.src)) {
+      const from = path.join(pair.src, rel);
+      const to = path.join(pair.dest, rel);
+      try {
+        const buf = fs.readFileSync(from);
+        let same = false;
+        try {
+          same = fs.readFileSync(to).equals(buf);
+        } catch {
+          same = false;
+        }
+        if (same) {
+          skipped += 1;
+          continue;
+        }
+        fs.mkdirSync(path.dirname(to), { recursive: true });
+        const tmp = `${to}.tmp-${process.pid}`;
+        fs.writeFileSync(tmp, buf);
+        fs.renameSync(tmp, to);
+        copied += 1;
+      } catch (err) {
+        logWarn(`agent 资源物化失败（${rel}）：${describeError(err)}`);
+      }
+    }
+  }
+  log(`agent 资源已物化：复制 ${copied} 个、跳过 ${skipped} 个（${payloadRoot} → ${agentDir}）`);
+  return { copied, skipped };
+}
+
 // ── 主流程 ────────────────────────────────────────────────────────────────────
 async function main() {
   log(`启动：node=${process.version} pid=${process.pid} cwd=${process.cwd()} argv=${JSON.stringify(process.argv.slice(0, 3))}`);
@@ -500,6 +587,7 @@ async function main() {
   }
 
   rotatePreviewSecrets(payloadRoot);
+  materializeAgentResources(payloadRoot);
 
   const hostname = process.env.PI_WEB_HOSTNAME && process.env.PI_WEB_HOSTNAME.length > 0
     ? process.env.PI_WEB_HOSTNAME
