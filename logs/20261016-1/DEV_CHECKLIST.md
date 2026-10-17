@@ -489,3 +489,120 @@ GET /            → HTTP/1.1 200 OK, Content-Length: 10677
 | `hilog -x \| grep PI_DESKTOP_ARK` | 本机为 **0 行**（ArkTS 侧 hilog 未进缓冲区/被轮转）⇒ ArkTS 侧证据改用 `uitest dumpLayout` 的结构化文本 |
 | `hdc shell rm -rf <filesDir>/payload` | 权限不足（`Permission denied`）：清态只能用 `bm uninstall` + 重新 install |
 | 路线 ①（整树投放 resfile） | 仍**不发**：会把 27,090 文件塞进 resfile（hvigor 会拖死）；脚本保留该分支仅作诊断 |
+
+---
+
+# 轮次 4（2026-10-17 · **真机** HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / API 26 / OpenHarmony-7.0.0.105）
+
+> 本轮全部结论都来自真机观测；命令与输出逐条给出。设备序列号 `3QC0226526001227`。
+> 构建：`hvigorw assembleHap --mode module -p product=default -p buildMode=debug --no-daemon` → **BUILD SUCCESSFUL**（0 ArkTS error）。
+
+## R4.1 P0 —— `POST /api/agent/new` 带 toolNames 即 SIGSYS 打死进程（**已修**）
+
+复现（修前，port 来自 `<base>/payload/pi-web.ready.json`）：
+
+```bash
+curl -s -X POST http://127.0.0.1:18457/api/agent/new -H 'Content-Type: application/json' \
+  -d '{"cwd":"/data/storage/el2/base/haps/entry/files/pi-cwd/20261017","type":"ensure_session","toolNames":[]}'
+# → HTTP 200 {"success":true,"sessionId":"01a14827-…"}
+curl -s … -d '…"toolNames":["read","write"]}'
+# → curl: (56) Empty reply; HTTP=000；随后 /api/web-auth = 000（进程已死）
+```
+
+故障块（`hilog -x`，原样引用）：
+
+```
+Reason:Signal:SIGSYS(SI_USER)from:11038:20020220
+Fault thread info:
+Tid:11038, Name:pi.PiDesktopArk
+#00 pc 00000000001e06cc /system/lib/ld-musl-aarch64.so.1(__syscall_cp+112)
+#01 pc 000000000017c588 /system/lib/ld-musl-aarch64.so.1(epoll_wait+52)
+#02 pc 000000000001a93c /system/lib64/chipset-sdk-sp/libeventhandler.z.so(OHOS::AppExecFwk::EpollIoWaiter::WaitFor…)
+C02C11/appspawn/APPSPAWN: [appspawn_service.c:140]org.fellow99.pi.PiDesktopArk with pid 11038 exit with signal:31
+```
+
+定位（真机数据，不是推断）：修前 `<base>/payload/node.log` 里**没有任何** `SIGSYS` 诊断行（`grep -c 'SIGSYS unclassified'` = 0），
+说明 shim 的 handler 当时**不在信号路径上**（处置已被 libuv 的 `uv_signal_start(SIGSYS)` 顶掉 —— 载荷里 `signal-exit`
+会注册 `process.on('SIGSYS')`）；`SI_USER` 说明打死进程的那一发是**进程自己 `kill()` 出来的**（`signal-exit` 的补发），
+不是内核 seccomp 直接投递。修后同一请求，node.log 捕到真正的 seccomp 陷阱：
+
+```
+sys 1792212875541 [node_bridge] SIGSYS seccomp syscall=425 arch=0xc00000b7 call_addr=0x59b6b2fe4c pc=… at=svc-4
+```
+
+`425 = io_uring_setup`、`0xC00000B7 = AUDIT_ARCH_AARCH64`（`SIGSYS seccomp` 行只在 `si_code == SYS_SECCOMP` 时打印）。
+
+修法（`ohos-node-bridge/library/src/main/cpp/node_bridge.c`，commit `b1e61f6`）：
+handler 按 `si_code` 分流（只有 `SYS_SECCOMP` 才仿真；其它来源记现场后恢复 `SIG_DFL` + re-raise），
+siginfo 按内核 ABI 固定偏移读取，新增监视线程在处置被顶掉时留档并装回。
+
+**反证实验**（同一次真机轮次，意外得到的对照）：把仿真分支临时关掉的那次构建上，同一请求立刻复现死亡，
+且 node.log 正是 `SIGSYS seccomp syscall=425 … -> restore-default` ⇒ **崩溃点是工具路径上的 seccomp 陷阱，我们的 shim 在信号路径上（不是旁观者）**。
+（该诊断开关实现有缺陷，**已整体删除**，不留在产品代码里。）
+
+修后验证（port 35905）：
+
+```
+POST /api/agent/new {"toolNames":["read","write"]}  → 200 {"success":true,"sessionId":"01a14839-2db5-…"}
+POST /api/agent/new {"type":"prompt", …}            → 200 {"sessionId":"01a14839-2f21-…"}
+GET  /api/agent/01a14839-2f21-…/events (SSE)        → data:{"type":"connected",…,"isStreaming":true} …
+                                                      data:{"type":"message_start",…} / text_delta:"done" / message_end
+POST /api/agent/new {"toolNames":[]}（无工具回归）   → 200 {"sessionId":"01a14839-2fe6-…"}
+curl /api/web-auth                                  → 200
+模型真的用了 write 工具：files/workspace/final-proof.txt = "P0 FINAL OK"（11 B）
+hilog 'Cpp Crash' 计数（本轮启动后）                = 0
+```
+
+## R4.2 P1a —— 声明的沙箱根建不出来（**已修**）
+
+修前：`GET /api/cwd/browse?root=sandbox` → `{"error":"Directory does not exist","code":"ENOENT","rootId":"sandbox"}`；
+`POST /api/cwd/browse`（代建）→ `Parent path is outside the declared workspace roots`。
+修法：`PiDesktopRuntime.launchInternal` 在投递 Node 之前 `ensureDeclaredRoots()`（`ensureDirStrict` 幂等创建，
+失败逐条 `Log.error` 并汇总进诊断串 `workspaceRoots`）。commit `f064878`。
+
+修后（真机）：
+
+```
+ls -ld files/workspace            → drwxrwx--- 2 20020220 20020220 … 2026-10-17 12:47 …/files/workspace
+GET /api/cwd/browse?root=sandbox  → 200 {"rootId":"sandbox","rootPath":"…/files/workspace","directories":[],"truncated":false,…}
+POST /api/cwd/browse {path:"…/files/workspace",name:"probe-dir"}
+                                  → 200 {"success":true,"path":"…/files/workspace/probe-dir"}
+ls -la files/workspace            → probe-dir/  final-proof.txt  p0-proof.txt
+```
+
+## R4.3 P2 —— 终端/PTY 以「能力」上报（应用侧已做，**上游 API 未改**）
+
+`CAP_TERMINAL_SUPPORTED=false` + `CAP_TERMINAL_REASON`（`common/Constants.ets`）→
+`HostCapabilities.capabilitiesJson()`（`runtime.facts` 的 `capabilities` 字段）+ 诊断串 `capabilities` +
+启动日志 `能力：…` + 首页橙色提示行。已确认字符串进了装机的 `ets/modules.abc`：
+`本平台没有 PTY 设备节点：/proc/mounts 的 325 条里没有 devpts，/dev 是 devfs，…`。
+⚠️ **未做**：`/api/terminal`（上游 pi-web 路由）仍抛 `Cannot load the node-pty native terminal module for openharmony-arm64`
+→ 本轮**没有**把该路由改成结构化 501（pi-web 是钉住的上游子模块，不在本轮提交范围；改用 payload 覆盖层需重建 84 MB 归档并让设备重解包）。
+
+## R4.4 平台探针（本轮实测，供能力清单 REV-2 引用）
+
+```
+param get const.product.name                → HUAWEI MateBook Pro
+param get const.product.software.version    → HAD-W24 7.0.0.107(SP7C00E100R13P5)
+param get const.ohos.apiversion             → 26
+param get const.ohos.fullname               → OpenHarmony-7.0.0.105
+uname -a → HarmonyOS localhost HongMeng Kernel 1.13.0 … aarch64 Toybox ; nproc → 20 ; MemTotal → 32680024 kB
+wc -l < /proc/mounts → 325 ; grep -c devpts /proc/mounts → 0 ; grep ' /dev ' → devfs /dev devfs rw,relatime,hmmac=genfs,seclabel 0 0
+stat /dev/ptmx → Permission denied (rc=1)
+cd /data/local/tmp/symtest && ln -s a.txt sym.txt → ln_rc=0 ; ls -l → sym.txt -> a.txt
+ln -s a /data/storage/el2/base/b → Read-only file system
+ln -s a /storage/Users/currentUser/sym.txt → No such file or directory
+sh -c 'exit 7' → rc=7 ; sh -c 'kill -11 $$' → Signal 11 (core dumped) rc=139 ; sh -c 'kill -31 $$' → Signal 31 (core dumped) rc=159
+sh -c 'kill -SYS $$' → Signal 31 (core dumped) rc=159（**不需要 seccomp**）
+sh -c 'sleep 1 &' → 2 s / 15 s 采样 ps -ef 僵尸数 0 / 0（全表 265 进程）
+```
+
+## R4.5 本轮**未验证 / 已知缺口**
+
+1. **P2 的上游 API 面**：`/api/terminal` 仍是 500 + 模块加载错误（见 R4.3）。
+2. **`Log.info('能力：…')` 没有在 hilog 里取到**（缓冲区被 CEF 日志刷掉；`hilog -x | grep D0033` 为空）。
+   能力串已确认在 `ets/modules.abc` 里，但**没有**拿到运行期 hilog 行作为证据。
+3. **P0 的精确机制仍有未解释的一环**：修前那次为什么 handler 不在路径上（libuv 顶掉 vs 其它），
+   本轮**没有**取到「处置被外部改写」的日志行（修后也没有）——因为修前无日志、修后未触发。
+   已确证的是「seccomp 陷阱在工具路径上，仿真与否决定生死」（R4.1 的反证实验）。
+4. **#16 的 L1 面**仍缺应用域 `grantpt`/`openpty` 实测（REV-2 只给反证）。
