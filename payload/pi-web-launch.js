@@ -481,8 +481,21 @@ function wireHostTransport(host) {
   }
   const libDir = process.env.NODE_BRIDGE_LIBDIR || '';
   const candidates = [];
-  if (libDir.length > 0) candidates.push(path.join(libDir, 'libnode_bridge.so'));
-  candidates.push('libnode_bridge.so');
+  // 先试**Node 专用**的 addon（方案 A：单独编译，napi_* 解析到 libnode.so）。
+  // 目录名是 `arm64-v8a`（HAR 里就是这样打包的），不是 `arm64` —— 两个都试，别猜。
+  if (libDir.length > 0) {
+    for (const abi of ['arm64-v8a', 'arm64']) {
+      candidates.push(path.join(libDir, 'libs', abi, 'libnode_host_client.so'));
+    }
+    candidates.push(path.join(libDir, 'libnode_host_client.so'));
+  }
+  candidates.push('libnode_host_client.so');
+  // 兜底：主桥 .so（已知在 Node env 里不可用，只用于把失败原因说清楚）
+  if (libDir.length > 0) {
+    for (const abi of ['arm64-v8a', 'arm64']) {
+      candidates.push(path.join(libDir, 'libs', abi, 'libnode_bridge.so'));
+    }
+  }
   const Module = require('node:module');
   for (const file of candidates) {
     try {
