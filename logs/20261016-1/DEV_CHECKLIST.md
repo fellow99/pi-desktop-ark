@@ -606,3 +606,107 @@ sh -c 'sleep 1 &' → 2 s / 15 s 采样 ps -ef 僵尸数 0 / 0（全表 265 进�
    本轮**没有**取到「处置被外部改写」的日志行（修后也没有）——因为修前无日志、修后未触发。
    已确证的是「seccomp 陷阱在工具路径上，仿真与否决定生死」（R4.1 的反证实验）。
 4. **#16 的 L1 面**仍缺应用域 `grantpt`/`openpty` 实测（REV-2 只给反证）。
+
+---
+
+# 轮次 5（2026-10-17 · **真机** HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / API 26 / OpenHarmony-7.0.0.105）
+
+> 本轮的追加项：① `/api/terminal` 改成**结构化能力响应**（上游补丁 + 载荷管线）；② SIGSYS **主动自检**。
+> 设备序列号 `3QC0226526001227`；端口一律从 `<base>/payload/pi-web.ready.json` 读（本轮 `38955`）。
+
+## R5.1 上游补丁 `PTY-1`：终端路由报「能力缺失」而不是 500
+
+| 项 | 内容 |
+|---|---|
+| 补丁 | `pi-desktop-ark/patches/v0.12.1/0001-terminal-capability-unsupported.patch`（7,514 B；sha256 `a4589e698cf6cc230c79d2a37687b9efd75bc68d09a3b12aa9813656e4035221`），登记见 `patches/README.md` §0 |
+| 目标 | `pi-web` tag `v0.12.1`（`f83b1a5`）；触及 `app/api/terminal/route.ts`（+21 行）+ **新增** `lib/terminal-capability.ts`（116 行） |
+| 生成 | 独立 detached worktree（`git worktree add --detach <scratch>/piweb-patch v0.12.1` → 改 → `git diff --cached` → `worktree remove --force`）；`../pi-web` 工作树全程零改动 |
+| 往返 | `git apply --check` 通过 → 应用 → `--reverse --check` 命中（幂等判据）→ 反向 → `sha256sum` 与 pristine 逐条相同（实测 `3e4af96e…`/`0a3774c5…` 还原） |
+| 状态码 | `POST` → **501**（UI 侧 `lib/terminal-client.ts#terminalRequest` 在 `!response.ok` 时抛 `data.error`、面板 `setError` 显示原因 ⇒ 必须非 2xx 且带人读 `error`）；`GET` → **200** + 能力标志（无副作用的查询，与 `/api/web-auth` 的「200 + 标志位」同形） |
+
+**管线接线**（`scripts/assemble-payload.mjs`，新增「上游补丁阶段」，只在 `--apply` 时动手）：
+
+```
+上游补丁    : 0001-terminal-capability-unsupported.patch → pi-web@v0.12.1（往返校验通过：2 文件 SHA-256 还原）
+载荷刷新    : pi-dist 缺少标记「terminal.pty」⇒ 用打了补丁的源码重新编译
+              next build 完成：530 s
+              已镜像 .next → …\pi-desktop-hos\pi-dist\.next（752 文件 / 351.3 MiB）
+载荷断言    : .next/server/app/api/terminal/route.js 含「terminal.pty」✔
+…
+上游补丁    : 已还原 pi-web pristine（0001-terminal-capability-unsupported.patch）
+```
+
+- **为什么必须重新编译**：载荷（`--from` = `pi-desktop-hos/pi-dist`）是**已编译的 Next 产物**，
+  源码补丁不参与 `next build` 就不会生效。脚本因此自己做「补丁 → 编译 → 断言标记 → 打包」，
+  并在收尾把 pi-web 还原；任何一步不满足即 `exit 2`（不产出「看起来只是没打补丁」的载荷）。
+- `git -C ../pi-web status --porcelain` 收尾实测：**空**（两次 `--apply` 之后都是 pristine）。
+
+### 归档确定性（两次连续 `--route tar --apply --force`）
+
+| 项 | 第 1 次（13:13:42→13:37:26） | 第 2 次（13:37:53→13:53:18） |
+|---|---|---|
+| 上游补丁阶段 | 应用 + 往返校验 + **重新编译**（530 s） | 应用 + 往返校验，载荷已含标记 ⇒ **跳过编译** |
+| 暂存 | 27,165 文件 / 375,100,350 B | 27,165 文件 / 375,100,350 B |
+| 裁剪 | 79 文件 + 2 整目录 / 454,288,178 B | 同 |
+| 归档大小 | **84,888,579 B（81.0 MiB）** | **84,888,579 B** |
+| SHA-256 | `1f85d684b3e0cbdbd4c68cd77f8bedfbc9a20fb8efb28e850428e980a60bcd6d` | **同**（逐字节相同） |
+| 归档条目 | 27,176 文件 / 2,709 目录 / 结束块在位 | 同 |
+
+### 真机（install → start → 新解包目录）
+
+```
+hvigorw assembleHap …            → BUILD SUCCESSFUL in 31 s 279 ms（ArkTS:ERROR 0 行，仅既有 WARN）
+entry-default-signed.hap         → 130,932,410 B
+hdc install -r …                 → install bundle successfully.
+ls <base>/payload                → 1f85d684b3e0  app.log  e1db33d73a20  node.log  pi-web.ready.json
+                                   （新 sha 前缀目录 = **重新解包**，旧目录 e1db33d73a20 保留）
+```
+
+```
+GET  /api/terminal            → HTTP/1.1 200
+{"ok":false,"capability":"terminal.pty","supported":false,"reason":"本平台没有伪终端（PTY）设施：
+openharmony-arm64 上没有 node-pty 可用的终端设备节点（无 devpts 挂载、无 /dev/pts、/dev/ptmx 不可打开）。
+这是平台能力缺失，不是原生模块加载失败，重试或重编都不会改变。","evidence":"/proc/mounts: 134 行,
+devpts=0; /dev/ptmx: EACCES; /dev/pts: EACCES","plan":"终端面板按 unsupported 降级；不实现伪终端
+（能力 terminal.pty = unsupported）","error":"终端不可用：本平台（openharmony-arm64）没有伪终端
+（PTY）支持 —— 属平台能力缺失（capability terminal.pty = unsupported），不是可以重试的故障。",
+"platform":"openharmony","arch":"arm64","runtime":"node v24.2.0"}
+
+POST /api/terminal            → HTTP=501（同一份 JSON；**不再是 500 + 「Cannot load the node-pty…」**）
+GET  /api/web-auth            → HTTP=200 {"enabled":false,"authenticated":true}
+GET  /                        → HTTP=200 bytes=10677（与轮次 4 同长，首页无回归）
+POST /api/agent/new {"toolNames":["read","write"]} → HTTP=200
+      {"success":true,"sessionId":"01a1486d-b1ac-71d8-9206-820043bb21bf","model":{"provider":"deepseek",
+       "modelId":"deepseek-v4-pro"},"thinkingLevel":"high"}
+POST /api/agent/<id> {"type":"prompt","message":"Reply with exactly: device-ok"} → HTTP=200
+GET  /api/agent/<id>/events   → SSE：connected / message_start / text_start / **text_delta ×3
+      （"device" "-" "ok"）/ text_end / message_end / prompt_done / agent_end / agent_settled**
+hilog -x | grep -ac 'Cpp Crash' → 0；pidof → 46164（存活）
+```
+
+## R5.2 SIGSYS 主动自检（库侧 `ohos-node-bridge`，`node_bridge.c`）
+
+`<base>/payload/node.log`（本次启动原样）：
+
+```
+sys 1792216461737 [node_bridge] SIGSYS 自检 t=install 处置=ours flags=0x44000004
+sys 1792216461784 [node_bridge] SIGSYS 自检 t=0ms 处置=ours flags=0x44000004
+sys 1792216461984 [node_bridge] SIGSYS 自检 t=200ms 处置=ours flags=0x44000004
+sys 1792216462784 [node_bridge] SIGSYS 自检 t=1s 处置=ours flags=0x44000004
+sys 1792216464785 [node_bridge] SIGSYS 自检 t=3s 处置=ours flags=0x44000004
+sys 1792216464785 [node_bridge] SIGSYS 自检汇总 t=3s 采样=5 差异=0 处置=ours（观测窗内未被外部改写；期间监视线程 rearm=0 次）
+```
+
+**观测结论：`ours` 全程（差异=0、rearm=0）**；另有 +49 s 的 in-handler 旁证
+（`sys 1792216510931 … SIGSYS seccomp syscall=425 … at=svc-4` 只可能由我们的 handler 写出）与
+`grep -c '处置被外部改写'` = 0。含义与剩余缺口见
+`ohos-node-bridge/logs/20261016-1/REVIEW_REPORT.md` §R3：主动自检只覆盖 `node::Start` 后前 3 s，
+更晚时刻的覆盖仍只有监视线程自己的轮询行。
+
+## R5.3 对前文结论的更正
+
+- §R4.3 末尾与 §R4.5 第 1 条写的「⚠️ **未做**：`/api/terminal` 仍抛 `Cannot load the node-pty…`」
+  自本轮起**已闭合**（见 R5.1）。
+- §R4.5 第 3 条「没有取到『处置被外部改写』的日志行」——本轮取到了**主动自检的观测结果**
+  （`ours`），但**仍未**观测到任何「被外部改写」的事实（含历史启动 0 次）；这不等于「libuv 顶不掉」，
+  只等于「在本轮观测窗内没顶掉」。口径见 R5.2 与库侧 REVIEW_REPORT §R3。
