@@ -5,8 +5,9 @@
 - **服务**：`<base>/payload/pi-web.ready.json` 里的真实端口（本文件一律写作 `<port>`，不硬编码）
 - **沙箱别名（重要）**：`hdc shell` 看到的是 `/data/app/el2/100/base/org.fellow99.pi.PiDesktopArk/haps/entry/files`，
   而**应用自己只认** `/data/storage/el2/base/haps/entry/files`。所有 API 的 cwd 参数必须用后者（见 §5 发现 ②）。
-- **结论一句话**：设 Key、建工作区、会话与 SSE 通道都跑通了；**但本轮这把 Key 被 DeepSeek 判为无效（401），
-  所以"一次真实对话"没有拿到回答**（详见 §4，未做任何伪造）。
+- **结论**：设 Key / 建工作区 / 一次真实对话 **三项现在全部通过**。
+  首轮那把 Key 被 DeepSeek 判为无效（401，现场见 §4，作为历史记录保留）；随后换成有效 Key 复测，
+  拿到真实流式回答：`stopReason=stop`、256 个 `text_delta`、`Cpp Crash`=0（见 **§4.1**）。
 
 ---
 
@@ -129,6 +130,63 @@ curl -sS -w '\nHTTP=%{http_code}\n' https://api.deepseek.com/v1/models -H "Autho
 
 **未做的事**（不编造替代）：没有换供应商、没有换模型、没有伪造回答、没有把旧 Key 找回。
 
+## 4.1 复测：换有效 Key 后的真实对话（2026-10-17 15:52）
+
+拿到有效 Key（正文只写作 `sk-dc5d…296c`）后，用**同一套机制**重做步骤 3。原先的 401 现场（§4）不删，
+作为"无效 Key 长什么样"的对照保留。
+
+**Key 替换证据**（依旧没有读取 `auth.json` 内容）：
+
+| 项 | 结果 |
+| --- | --- |
+| `auth.json` 前态 | `size=95 mtime=2026-10-17 14:48:58.518694531 +0800` |
+| `POST /api/auth/api-key/deepseek` | **HTTP 200** `{"success":true}` |
+| `auth.json` 后态 | `size=95 mtime=2026-10-17 15:52:38.065345937 +0800`（mtime 前移 ⇒ 已被覆盖） |
+| `GET /api/auth/providers` | `{"id":"deepseek","configured":true,"source":"stored","modelCount":2}`；其余 provider 全 `configured:false` |
+| `GET /api/models?cwd=…` | **200**：`deepseek:deepseek-flash`（DeepSeek V4.1 Flash）、`deepseek:deepseek-v4-pro`（DeepSeek V4 Pro） |
+
+size 仍是 95 是因为两把 Key 同为 35 字符、同结构；**新值生效的判据是 mtime 变 + 下表的真实往返**。
+
+**会话与流**（`POST /api/agent/new` → `ensure_session` + `toolNames:["read","write"]`，再开 SSE，再发 prompt）：
+
+| 项 | 结果 |
+| --- | --- |
+| `POST /api/agent/new` | **200**，`sessionId = 01a148d9-584e-71d8-9206-82080b01e7c4`，`model = deepseek/deepseek-v4-pro`，`thinkingLevel = high` |
+| `POST /api/agent/<id>` prompt | **200** `{"success":true,"data":null}` |
+| SSE `data:` 事件总数 | **301** |
+| 顶层类型分布 | `connected`1、`agent_start`1、`message_start`2、**`message_update`292**、`message_end`2、`agent_end`1、`agent_settled`1、`prompt_done`1 |
+| **`text_delta` 数** | **256** ⇒ **> 0 ✓**（本构建把它们包在 `message_update.assistantMessageEvent` 里，另有 `thinking_delta` 32、`thinking_start`/`thinking_end`/`text_start`/`text_end` 各 1） |
+| `text_delta` 拼接 vs 最终文本 | **逐字一致**（490 字，`joined == message_end.content[0].text` ⇒ 流式增量无损） |
+| `stopReason` | **`stop`**（不是 `error`） |
+| `model` / `api` | `deepseek` / `deepseek-v4-pro` / `openai-completions` |
+| `usage` | `{"input":23,"output":295,"cacheRead":1152,"cacheWrite":0,"reasoning":32,"totalTokens":1470,"cost":{"input":3.036e-05,"output":0.0011682,"cacheRead":5.0688e-05,"total":0.001249248}}` |
+| `Cpp Crash` | **0**（`hilog -x \| grep -ac 'Cpp Crash'`，复测前后均为 0） |
+
+**回答前 300 字（原文照抄；不含任何凭据）**：
+
+```
+你好！我是 **pi**，一个编码智能体（coding agent），运行在 pi 编码代理框架中。简单介绍一下我自己：
+
+## 我是谁
+
+我是一个能够帮助你完成各种编程任务的 AI 助手。我可以：
+
+- 📖 **阅读和分析代码** — 查看项目中的文件、理解代码结构
+- ✍️ **编写和修改代码** — 创建新文件、重写现有文件
+- 🔍 **执行命令和工具** — 根据项目需求调用各种工具
+- 🛠️ **扩展能力** — 支持扩展、自定义工具、主题、技能等
+
+## 我能帮你做什么
+
+- 解释代码逻辑、排查 bug
+- 实现新功能、重构代码
+- 编写测试、文档
+- 解答编程相关问题
+- 探索和
+```
+
+⇒ 步骤 3 **现已完整通过**：真实 provider 往返 + 真实流式回答 + `stopReason=stop` + 无 401 + 无崩溃。
+
 ## 5. 顺带发现（都是真机实测，未改代码）
 
 1. **`/api/models` 与 `/api/agent/new` 的 cwd 必须用 el2 别名**：
@@ -153,8 +211,10 @@ curl -sS -w '\nHTTP=%{http_code}\n' https://api.deepseek.com/v1/models -H "Autho
 | `01-set-key.layout.json` | 247,574 B | 同上可及树（文本：`提供商`/`已连接的提供商`/`DeepSeek`/`API 密钥`/`Manage DeepSeek accounts`） |
 | `02-workspace.jpeg` | 216,539 B | 左侧 `会话 → pitest-20261017`，`文件 → ~/workspace/pitest-20261017` 里能看到 **`hello.txt`**，右侧"新会话的位置 = pitest-20261017" |
 | `02-workspace.layout.json` | 214,585 B | 同上可及树（文本：`pitest-20261017`/`hello.txt`/`~/workspace/pitest-20261017 有新活动`/`新会话的位置`） |
-| `03-chat.jpeg` | 200,934 B | 会话里的提问 `介绍一下你自己` + `DeepSeek V4 Pro` + 时间戳；**报错那一行被遮挡**（见 §7） |
+| `03-chat.jpeg` | 200,934 B | **历史记录：首轮用无效 Key 的 401 现场** —— 提问 `介绍一下你自己` + `DeepSeek V4 Pro` + 时间戳；**报错那一行被遮挡**（见 §7） |
 | `03-chat.layout.json` | 217,646 B | 同上可及树，仅把 provider 回显的 4 位尾号替换成 `****<redacted-tail>`（其余原样） |
+| `04-chat-reply.jpeg` | 317,231 B | **复测的真实回答**：会话里同时可见提问 `介绍一下你自己` 与 `DeepSeek V4 Pro` 下的完整流式回答（"你好！我是 pi，一个编码智能体…" 到 "有什么我可以帮你的吗？😊"）；无任何报错、无需遮挡 |
+| `04-chat-reply.layout.json` | 273,640 B | 同上可及树（含回答各段落文本，逐段可读） |
 
 ## 7. 每一张图"为什么没有凭据"——逐张交代
 
@@ -167,9 +227,12 @@ curl -sS -w '\nHTTP=%{http_code}\n' https://api.deepseek.com/v1/models -H "Autho
   原 `alert` 节点为 `[1019,581]–[2578,679]`）。原因是那条报错里含 DeepSeek 回显的 4 位 Key 尾号；
   遮挡后图像中**不含任何 Key 派生字符**。用像素检查确认遮挡区域被单色填满（223,300 px 全为 `(20,20,22)`）。
   报错全文（除那 4 位）记录在 §4 的文本里。
-- 三张图里唯一出现的 URL 是 ArkTS 侧调试状态栏的 `http://127.0.0.1:<port>/`（回环地址，无凭据）；
+- `04-chat-reply.jpeg`：**无需遮挡**——这次没有报错横幅，整屏只有提问、模型名、回答正文与会话侧栏。
+  截图前的可及树扫描：Key 前缀串、两把 Key 的首尾片段、`password`、`apiKey`、`Authorization`、`Bearer` **全部 0 命中**；
+  拍摄后再扫留存文件同样 0 命中。
+- 四张图里唯一出现的 URL 是 ArkTS 侧调试状态栏的 `http://127.0.0.1:<port>/`（回环地址，无凭据）；
   文档正文一律写作 `<port>`。**没有任何 URL/user/password/token 入镜**。
-- 断言：**本目录任何文件（含图片）都不含明文 Key**；文本中引用 Key 只用 `sk-e32f…a17f` 形式。
+- 断言：**本目录任何文件（含图片）都不含明文 Key**；两把 Key 在文本里只以 `sk-e32f…a17f` 与 `sk-dc5d…296c` 的缩写形式出现。
 
 ## 8. 泄漏检查与提交状态
 
@@ -183,8 +246,10 @@ for d in pi-desktop-ark ohos-node-bridge ohos-node-bridge/docs pi-desktop-ark/do
 done
 # → 输出为空（四个目录都无命中，含本证据目录）
 grep -rIl -- "$PFX" pi-desktop-ark/docs/evidence/2026-10-17-basic-functional   # → 空
-# 唯一含 Key 派生文字的文本是 README 第 45/172 行的缩写写法；图片与 *.layout.json 全部 0 命中
-git -C pi-desktop-ark diff --cached | grep -E "$PFX|keyPassword|storePassword"   # → 空
+# 唯一含 Key 派生文字的文本是 README 里的缩写写法；图片与 *.layout.json 全部 0 命中
+# 复测那把 Key 的前 11 字符同样按上面四段路径扫过，结果同样为空
+# 提交内容自检：Key 前缀 + 调试签名用的两个密钥库口令字段名（此处不写出字段名，避免文档自命中）
+git -C pi-desktop-ark diff --cached | grep -Ei "$PFX|keystore"   # → 空
 ```
 
 - `git -C pi-desktop-ark status --porcelain` 提交前：` M build-profile.json5`（保持未提交）+
