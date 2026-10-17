@@ -37,6 +37,7 @@
 
 import { createHash } from 'node:crypto';
 import { createGunzip, createGzip } from 'node:zlib';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -100,7 +101,6 @@ const APP_PAYLOAD_DIR = path.join(PROJECT_ROOT, 'payload');
 const APP_PAYLOAD_ENTRIES = ['pi-web-launch.js', 'env.js', 'extensions', 'config'];
 
 // ── 命令行解析 ────────────────────────────────────────────────────────────────
-
 function parseArgs(argv) {
   const opts = {
     from: DEFAULT_FROM,
@@ -111,7 +111,12 @@ function parseArgs(argv) {
     keepStaging: false,
     json: '',
     quiet: false,
-    bridge: DEFAULT_BRIDGE
+    bridge: DEFAULT_BRIDGE,
+    piWeb: DEFAULT_PI_WEB,
+    patchDir: DEFAULT_PATCH_DIR,
+    piWebNode: process.execPath,
+    skipPatches: false,
+    keepPatches: false
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -128,6 +133,11 @@ function parseArgs(argv) {
       case '--bridge': opts.bridge = path.resolve(next()); break;
       case '--apply': opts.apply = true; break;
       case '--force': opts.force = true; break;
+      case '--pi-web': opts.piWeb = path.resolve(next()); break;
+      case '--patch-dir': opts.patchDir = path.resolve(next()); break;
+      case '--pi-web-node': opts.piWebNode = path.resolve(next()); break;
+      case '--skip-patches': opts.skipPatches = true; break;
+      case '--keep-patches': opts.keepPatches = true; break;
       case '--keep-staging': opts.keepStaging = true; break;
       case '--json': opts.json = path.resolve(next()); break;
       case '--quiet': opts.quiet = true; break;
@@ -153,6 +163,11 @@ function usage() {
     '  --force           目标已存在且非空时也继续（会先清空目标）',
     '  --keep-staging    路线 ②：保留暂存目录（默认打完包就删）',
     '  --bridge <dir>    库目录（默认 ../ohos-node-bridge）；取其 payload/ 三件随包投放（resfile + 归档内各一份）',
+    '  --pi-web <dir>    被 patch 的上游工作树（默认 ../pi-web；其 HEAD 必须正好是 --patch-tag 那个 tag）',
+    '  --patch-dir <dir> 上游补丁目录（默认 patches/v0.12.1/，按被 patch 的上游 tag 命名）',
+    '  --pi-web-node <p> 重新编译 pi-web 用的 node（默认当前 node；必须与装 node_modules 的那个一致）',
+    '  --skip-patches    不应用上游补丁（诊断用；载荷因此带着未打补丁的语义）',
+    '  --keep-patches    跑完不还原 pi-web（默认还原成 pristine）',
     '  --json <path>     把机器可读报告写到该路径',
     '  --quiet           少打印（仍打印总计）',
     '  --help            显示本帮助'
@@ -559,6 +574,187 @@ async function sha256File(filePath) {
   return hash.digest('hex');
 }
 
+// ── 上游补丁（pi-web）：应用到载荷组装里，**不靠手改工作树** ────────────────────
+/**
+ * 本工程的上游补丁纪律（与 `pi-desktop-hos/patches/README.md` §「新增补丁时必须遵守的规则」
+ * 及 `pi-desktop-hos/scripts/prepare-next.mjs` 阶段 1b 同一条）：
+ *   ① **幂等**：先 `git apply --reverse --check`，命中即视为「已应用」→ 跳过（no-op）；
+ *   ② **冲突即终止**：绝不 `--3way`，绝不覆盖上游工作树里的用户改动；
+ *   ③ **可往返**：应用 → 反向 → 断言受影响文件的 SHA-256 逐条还原；
+ *   ④ **按上游 tag 组织**：`patches/<pi-web tag>/NNNN-name.patch`；
+ *   ⑤ **收尾还原**：默认跑完把 pi-web 还原成 pristine（`--keep-patches` 可留）。
+ *
+ * 为什么补丁要参与**载荷组装**而不是「构建前手工 apply 一下」：载荷（`--from`，默认
+ * `../pi-desktop-hos/pi-dist`）是**已编译的 Next 产物** —— `.next/server/app/api/terminal/route.js`
+ * 是 webpack 打包后的 JS，源码补丁不重新编译就不会生效。因此本脚本按「补丁 → 编译 → 打包」
+ * 的顺序自己把这件事做完，并在打包前用**标记串**断言产物真的换了，否则 exit 2：
+ * 组装结果因此不再依赖「某个人记得在本地先 apply」，也不会静默产出旧载荷。
+ */
+const PI_WEB_PATCH_TAG = 'v0.12.1';
+/** 被 patch 的上游工作树（与 prepare-next.mjs 同一个：`../pi-web`） */
+const DEFAULT_PI_WEB = path.resolve(PROJECT_ROOT, '..', 'pi-web');
+/** 补丁目录：按**被 patch 的上游 tag** 命名，与 pi-desktop-hos/patches/ 同构 */
+const DEFAULT_PATCH_DIR = path.join(PROJECT_ROOT, 'patches', PI_WEB_PATCH_TAG);
+/** 载荷里必须出现的标记（补丁里的能力名）—— 用来识别「pi-dist 还是旧编译产物」 */
+const PI_WEB_PATCH_MARKER = 'terminal.pty';
+/** 打上标记的编译产物（Next 的 server 路由 bundle） */
+const PI_WEB_TERMINAL_ROUTE_REL = '.next/server/app/api/terminal/route.js';
+
+/** 补丁阶段的失败（main 捕获后 exit 2：这是「输入不满足」，不是脚本 bug） */
+class PatchStageError extends Error {}
+
+function runGit(args, cwd) {
+  const res = spawnSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  return {
+    ok: !res.error && res.status === 0,
+    out: `${res.stdout ?? ''}${res.stderr ?? ''}`.trim(),
+    error: res.error
+  };
+}
+
+function sha256Sync(absPath) {
+  try {
+    return createHash('sha256').update(fs.readFileSync(absPath)).digest('hex');
+  } catch {
+    return null;   /* 补丁新增的文件：应用前不存在 ⇒ null（往返后必须仍是 null） */
+  }
+}
+
+/** 从补丁里取受影响文件（`+++ b/<rel>`；`/dev/null` 表示新增/删除） */
+function patchAffectedFiles(patchPath) {
+  const text = fs.readFileSync(patchPath, 'utf8');
+  const seen = new Set();
+  for (const line of text.split('\n')) {
+    const m = /^\+\+\+ b\/(.+)$/.exec(line);
+    if (m && m[1] !== '/dev/null') seen.add(m[1].replace(/\r$/, ''));
+  }
+  return [...seen];
+}
+
+/** 载荷里的终端路由是否已带补丁语义（false ⇒ 需要重新编译） */
+function payloadHasPatchMarker(fromDir) {
+  try {
+    return fs.readFileSync(path.join(fromDir, PI_WEB_TERMINAL_ROUTE_REL), 'utf8').includes(PI_WEB_PATCH_MARKER);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 幂等应用 `patches/<tag>/*.patch`（按文件名排序 ⇒ 确定性）。
+ * 返回 `{ applied: [name], skipped: [name] }`；任何一步不符合纪律 ⇒ 抛 PatchStageError。
+ */
+function applyPiWebPatches(opts) {
+  const dir = opts.patchDir;
+  if (!fs.existsSync(dir)) return { applied: [], skipped: [], present: false };
+  const patches = fs.readdirSync(dir).filter((n) => n.endsWith('.patch')).sort();
+  if (patches.length === 0) return { applied: [], skipped: [], present: false };
+
+  const head = runGit(['rev-parse', 'HEAD'], opts.piWeb);
+  if (!head.ok) throw new PatchStageError(`pi-web 不是可用的 git 工作树：${opts.piWeb}（${head.out}）`);
+  const describe = runGit(['describe', '--tags', '--exact-match', 'HEAD'], opts.piWeb);
+  if (!describe.ok || describe.out !== PI_WEB_PATCH_TAG) {
+    throw new PatchStageError(
+      `pi-web HEAD 不在被 patch 的上游 tag 上：期望 ${PI_WEB_PATCH_TAG}，`
+      + `实测 ${describe.ok ? describe.out : `(无 tag) ${head.out.slice(0, 12)}`}`
+      + '（补丁按上游 tag 组织，别在错误基线上打）',
+    );
+  }
+
+  const applied = [];
+  const skipped = [];
+  for (const name of patches) {
+    const patchPath = path.join(dir, name);
+    if (runGit(['apply', '--reverse', '--check', patchPath], opts.piWeb).ok) {
+      skipped.push(name);   /* 幂等：已应用 ⇒ 跳过 */
+      continue;
+    }
+    const check = runGit(['apply', '--check', patchPath], opts.piWeb);
+    if (!check.ok) {
+      throw new PatchStageError(`补丁与当前 pi-web 工作树冲突，中止（不得 --3way）：${name}\n  ${check.out}`);
+    }
+    const files = patchAffectedFiles(patchPath);
+    const before = files.map((rel) => [rel, sha256Sync(path.join(opts.piWeb, rel))]);
+    if (!runGit(['apply', patchPath], opts.piWeb).ok) {
+      throw new PatchStageError(`补丁应用失败：${name}`);
+    }
+    if (!runGit(['apply', '--reverse', patchPath], opts.piWeb).ok) {
+      throw new PatchStageError(`补丁反向应用失败（可往返性被破坏）：${name}`);
+    }
+    for (const [rel, sha] of before) {
+      const now = sha256Sync(path.join(opts.piWeb, rel));
+      if (now !== sha) {
+        throw new PatchStageError(`补丁往返校验失败：${rel} 未还原（${sha} → ${now}）：${name}`);
+      }
+    }
+    if (!runGit(['apply', patchPath], opts.piWeb).ok) {
+      throw new PatchStageError(`补丁正式应用失败：${name}`);
+    }
+    console.log(`上游补丁    : ${name} → pi-web@${PI_WEB_PATCH_TAG}`
+      + `（往返校验通过：${files.length} 文件 SHA-256 还原）`);
+    applied.push(name);
+  }
+  return { applied, skipped, present: true };
+}
+
+/** 还原本次应用的全部补丁（pi-web 收尾必须是 pristine） */
+function revertPiWebPatches(opts, names) {
+  const failed = [];
+  for (const name of [...names].reverse()) {
+    const r = runGit(['apply', '--reverse', path.join(opts.patchDir, name)], opts.piWeb);
+    if (!r.ok) failed.push(`${name}: ${r.out}`);
+  }
+  return failed;
+}
+
+/**
+ * 用**打了补丁的源码**重新编译 pi-web，并把 `.next` 镜像进载荷源目录。
+ *
+ * 只镜像 `.next`（不跑 collect-pi）：`pi-dist` 的其余部分（node_modules / public / package.json）
+ * 与源码无关；`.next/cache`、`.next/dev` 与 `*.nft.json` 一律不拷（后者由 crop-rules 裁掉，
+ * 拷了也只是白搬 348 MB）。
+ */
+async function rebuildPiWebInto(opts) {
+  const nextBin = path.join(opts.piWeb, 'node_modules', 'next', 'dist', 'bin', 'next');
+  if (!fs.existsSync(nextBin)) {
+    throw new PatchStageError(`找不到 next 入口：${nextBin}（pi-web 依赖未安装？）`);
+  }
+  console.log(`载荷刷新    : pi-dist 缺少标记「${PI_WEB_PATCH_MARKER}」⇒ 用打了补丁的源码重新编译`);
+  console.log(`              node = ${opts.piWebNode}`);
+  console.log(`              next build --webpack（cwd=${opts.piWeb}）`);
+  const started = Date.now();
+  const res = spawnSync(opts.piWebNode, [nextBin, 'build', '--webpack'], {
+    cwd: opts.piWeb,
+    encoding: 'utf8',
+    env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' },
+    maxBuffer: 64 * 1024 * 1024
+  });
+  const output = `${res.stdout ?? ''}${res.stderr ?? ''}`;
+  const tail = output.trim().split('\n').slice(-12).map((l) => `              │ ${l}`).join('\n');
+  if (res.error || res.status !== 0) {
+    throw new PatchStageError(`next build 失败（status=${res.status ?? 'n/a'}）：\n${tail}`);
+  }
+  console.log(`              next build 完成：${((Date.now() - started) / 1000).toFixed(0)} s`);
+  console.log(tail);
+
+  const srcNext = path.join(opts.piWeb, '.next');
+  const dstNext = path.join(opts.from, '.next');
+  const skip = (p) => {
+    const base = path.basename(p);
+    if (base === 'cache' || base === 'dev') return true;
+    return base.endsWith('.nft.json');
+  };
+  await fsp.mkdir(dstNext, { recursive: true });
+  fs.cpSync(srcNext, dstNext, { recursive: true, force: true, filter: (p) => !skip(p) });
+  const copied = walkTree(dstNext).filter((f) => f.error === undefined);
+  console.log(`              已镜像 .next → ${dstNext}（${copied.length} 文件 / ${human(totalBytes(copied))}）`);
+  if (!payloadHasPatchMarker(opts.from)) {
+    throw new PatchStageError(`重新编译后载荷里仍找不到标记「${PI_WEB_PATCH_MARKER}」`
+      + `（${path.join(opts.from, PI_WEB_TERMINAL_ROUTE_REL)}）—— 补丁没进编译产物，不能打包`);
+  }
+  console.log(`载荷断言    : ${PI_WEB_TERMINAL_ROUTE_REL} 含「${PI_WEB_PATCH_MARKER}」✔`);
+}
+
 /**
  * 归档可读性自检（**回归检查**：写出来的 tar 必须能被读端逐块走通）。
  *
@@ -736,6 +932,27 @@ function payloadReadme(route, sourceFiles, afterBytes) {
   return lines.join('\n');
 }
 
+/** 待还原的补丁（正常收尾 / 失败 / 异常退出都走同一个还原点，保证 pi-web 结束是 pristine） */
+let g_pendingPatchRevert = null;
+/** 当前运行参数（顶层 catch 里还原补丁也要用） */
+let g_activeOpts = null;
+
+function revertPiWebPatchesOnce() {
+  if (!g_pendingPatchRevert || g_pendingPatchRevert.length === 0) return;
+  const names = g_pendingPatchRevert;
+  g_pendingPatchRevert = null;
+  if (g_activeOpts && g_activeOpts.keepPatches) {
+    console.log(`上游补丁    : --keep-patches ⇒ 保留在 pi-web（${names.join(', ')}）`);
+    return;
+  }
+  const failed = revertPiWebPatches(g_activeOpts, names);
+  if (failed.length > 0) {
+    console.error(`✗ pi-web 还原失败（工作树不再是 pristine）：\n    ${failed.join('\n    ')}`);
+  } else {
+    console.log(`上游补丁    : 已还原 pi-web pristine（${names.join(', ')}）`);
+  }
+}
+
 // ── 库自带 Node 侧载荷（bootstrap/host/tar-extract；不在 HAR 里）────────────────
 
 /**
@@ -889,6 +1106,38 @@ async function main() {
     console.error('✗ 应用载荷覆盖层缺失（payload/ 下必须齐备，否则入口与 env 契约都投不进去）：');
     for (const missing of appPayload.missing) console.error(`    ${missing}`);
     return 2;
+  }
+
+  /*
+   * 上游补丁阶段（**只在 --apply 时动手**，dry run 绝不碰 pi-web）：
+   *   ① 幂等应用 patches/<tag>/*.patch（往返校验内建）；
+   *   ② 载荷里没有补丁标记 ⇒ 用打了补丁的源码重新编译并镜像 .next（否则打出来的还是旧语义）；
+   *   ③ 收尾还原 pi-web（--keep-patches 可留）。
+   * 任何一步不满足 ⇒ exit 2（这是「输入不满足」，不是脚本 bug）。
+   */
+  let patchState = { applied: [], skipped: [], present: false };
+  if (opts.apply && !opts.skipPatches) {
+    try {
+      g_activeOpts = opts;
+      patchState = applyPiWebPatches(opts);
+      g_pendingPatchRevert = patchState.applied;   /* 收尾/失败/异常都要还原 */
+      if (patchState.present) {
+        for (const name of patchState.skipped) console.log(`上游补丁    : ${name} 已应用 ⇒ 跳过（幂等）`);
+        if (!payloadHasPatchMarker(opts.from)) {
+          await rebuildPiWebInto(opts);
+        } else {
+          console.log(`载荷断言    : ${PI_WEB_TERMINAL_ROUTE_REL} 已含「${PI_WEB_PATCH_MARKER}」✔（无需重新编译）`);
+        }
+      }
+    } catch (err) {
+      if (!(err instanceof PatchStageError)) throw err;
+      console.error(`✗ 上游补丁阶段失败：${err.message}`);
+      console.error('  ⇒ 不产出「看起来只是没打补丁」的载荷；pi-web 还原如下：');
+      revertPiWebPatchesOnce();
+      return 2;
+    }
+  } else if (opts.apply && opts.skipPatches) {
+    console.log('上游补丁    : --skip-patches ⇒ 未应用（载荷按当前 pi-dist 原样打包）');
   }
   const sourceFiles = walkTree(opts.from).filter((f) => f.error === undefined);
   const plan = planCrop(sourceFiles);
@@ -1044,6 +1293,7 @@ async function main() {
     await fsp.writeFile(opts.json, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
     console.log(`报告已写入  : ${opts.json}`);
   }
+  revertPiWebPatchesOnce();   /* 收尾：pi-web 必须是 pristine（--keep-patches 可留） */
   console.log('✓ 组装完成');
   return 0;
 }
@@ -1052,6 +1302,7 @@ main()
   .then((code) => process.exit(code))
   .catch((err) => {
     console.error(`✗ 组装失败：${err && err.message ? err.message : String(err)}`);
+    revertPiWebPatchesOnce();   /* 异常退出也要把 pi-web 还原（不留半打补丁的工作树） */
     if (err && err.stack) console.error(err.stack);
     process.exit(1);
   });
