@@ -595,10 +595,24 @@ const PI_WEB_PATCH_TAG = 'v0.12.1';
 const DEFAULT_PI_WEB = path.resolve(PROJECT_ROOT, '..', 'pi-web');
 /** 补丁目录：按**被 patch 的上游 tag** 命名，与 pi-desktop-hos/patches/ 同构 */
 const DEFAULT_PATCH_DIR = path.join(PROJECT_ROOT, 'patches', PI_WEB_PATCH_TAG);
-/** 载荷里必须出现的标记（补丁里的能力名）—— 用来识别「pi-dist 还是旧编译产物」 */
-const PI_WEB_PATCH_MARKER = 'terminal.pty';
-/** 打上标记的编译产物（Next 的 server 路由 bundle） */
-const PI_WEB_TERMINAL_ROUTE_REL = '.next/server/app/api/terminal/route.js';
+/**
+ * 载荷里必须出现的标记（每条补丁一个）—— 用来识别「pi-dist 还是旧编译产物」。
+ *
+ * 为什么是**一张表**而不是一个常量：编译产物是 webpack 打出来的，源码补丁只有
+ * 重新编译才会生效。以前只认终端补丁的标记，于是「只有终端补丁变了」能触发重编，
+ * 而新加的 cwd 补丁不会 —— 载荷会安静地带着旧语义发出去。每条补丁都必须能被
+ * 自己的标记断言到，否则整体判为「未重编」。
+ *
+ * 标记都取自**路由 bundle 里必然出现的字面量**（Next 会把 `@/lib/*` 内联进
+ * `route.js`，终端补丁的 `terminal.pty` 就是这样被断言到的）：
+ *   · `PI_HOS_ROOTS`         —— `lib/directory-browser.ts` 读宿主声明的工作区根；
+ *   · `pi-hos-sandbox-alias` —— `lib/hos-sandbox-path.ts` 的编译期标记（写在 hint 里）。
+ */
+const PI_WEB_PATCH_MARKERS = [
+  { rel: '.next/server/app/api/terminal/route.js', marker: 'terminal.pty' },
+  { rel: '.next/server/app/api/cwd/browse/route.js', marker: 'PI_HOS_ROOTS' },
+  { rel: '.next/server/app/api/cwd/validate/route.js', marker: 'pi-hos-sandbox-alias' }
+];
 
 /** 补丁阶段的失败（main 捕获后 exit 2：这是「输入不满足」，不是脚本 bug） */
 class PatchStageError extends Error {}
@@ -631,13 +645,19 @@ function patchAffectedFiles(patchPath) {
   return [...seen];
 }
 
-/** 载荷里的终端路由是否已带补丁语义（false ⇒ 需要重新编译） */
-function payloadHasPatchMarker(fromDir) {
-  try {
-    return fs.readFileSync(path.join(fromDir, PI_WEB_TERMINAL_ROUTE_REL), 'utf8').includes(PI_WEB_PATCH_MARKER);
-  } catch {
-    return false;
+/** 载荷里缺少的补丁标记（空数组 = 已是最新编译产物；非空 ⇒ 需要重新编译） */
+function missingPatchMarkers(fromDir) {
+  const missing = [];
+  for (const { rel, marker } of PI_WEB_PATCH_MARKERS) {
+    let text = '';
+    try {
+      text = fs.readFileSync(path.join(fromDir, rel), 'utf8');
+    } catch {
+      text = '';
+    }
+    if (!text.includes(marker)) missing.push(`${rel}（缺「${marker}」）`);
   }
+  return missing;
 }
 
 /**
@@ -719,7 +739,8 @@ async function rebuildPiWebInto(opts) {
   if (!fs.existsSync(nextBin)) {
     throw new PatchStageError(`找不到 next 入口：${nextBin}（pi-web 依赖未安装？）`);
   }
-  console.log(`载荷刷新    : pi-dist 缺少标记「${PI_WEB_PATCH_MARKER}」⇒ 用打了补丁的源码重新编译`);
+  console.log(`载荷刷新    : pi-dist 缺少补丁标记 ⇒ 用打了补丁的源码重新编译`);
+  console.log(`              缺：${missingPatchMarkers(opts.from).join('｜')}`);
   console.log(`              node = ${opts.piWebNode}`);
   console.log(`              next build --webpack（cwd=${opts.piWeb}）`);
   const started = Date.now();
@@ -748,11 +769,12 @@ async function rebuildPiWebInto(opts) {
   fs.cpSync(srcNext, dstNext, { recursive: true, force: true, filter: (p) => !skip(p) });
   const copied = walkTree(dstNext).filter((f) => f.error === undefined);
   console.log(`              已镜像 .next → ${dstNext}（${copied.length} 文件 / ${human(totalBytes(copied))}）`);
-  if (!payloadHasPatchMarker(opts.from)) {
-    throw new PatchStageError(`重新编译后载荷里仍找不到标记「${PI_WEB_PATCH_MARKER}」`
-      + `（${path.join(opts.from, PI_WEB_TERMINAL_ROUTE_REL)}）—— 补丁没进编译产物，不能打包`);
+  const stillMissing = missingPatchMarkers(opts.from);
+  if (stillMissing.length > 0) {
+    throw new PatchStageError(`重新编译后载荷里仍找不到补丁标记：${stillMissing.join('｜')}`
+      + ' —— 补丁没进编译产物，不能打包');
   }
-  console.log(`载荷断言    : ${PI_WEB_TERMINAL_ROUTE_REL} 含「${PI_WEB_PATCH_MARKER}」✔`);
+  console.log(`载荷断言    : ${PI_WEB_PATCH_MARKERS.length} 条补丁标记全部命中 ✔`);
 }
 
 /**
@@ -1123,10 +1145,11 @@ async function main() {
       g_pendingPatchRevert = patchState.applied;   /* 收尾/失败/异常都要还原 */
       if (patchState.present) {
         for (const name of patchState.skipped) console.log(`上游补丁    : ${name} 已应用 ⇒ 跳过（幂等）`);
-        if (!payloadHasPatchMarker(opts.from)) {
+        const missingBefore = missingPatchMarkers(opts.from);
+        if (missingBefore.length > 0) {
           await rebuildPiWebInto(opts);
         } else {
-          console.log(`载荷断言    : ${PI_WEB_TERMINAL_ROUTE_REL} 已含「${PI_WEB_PATCH_MARKER}」✔（无需重新编译）`);
+          console.log(`载荷断言    : ${PI_WEB_PATCH_MARKERS.length} 条补丁标记已命中 ✔（无需重新编译）`);
         }
       }
     } catch (err) {
