@@ -1,6 +1,7 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { Log } from '../common/Constants';
+import { WindowState } from '../common/WindowState';
 import { PiDesktopRuntime } from '../app/PiDesktopRuntime';
 
 /**
@@ -56,6 +57,15 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       Log.info('loadContent ok（随后由页面投递 Node）');
+      // ⑫（行动项 E12）：窗口尺寸记忆。restore 只应用一次；watch 只记录**用户后续改过的**
+      // 尺寸——启动时不回写，避免把系统默认尺寸固化成「用户选择」。
+      try {
+        const restored: string = WindowState.restore(windowStage, this.context);
+        Log.info('窗口状态 restore → ' + restored);
+        WindowState.watch(windowStage, this.context);
+      } catch (e) {
+        Log.warn('窗口状态初始化失败（不影响启动）：' + JSON.stringify(e));
+      }
     });
   }
 
