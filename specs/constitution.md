@@ -7,7 +7,7 @@
 |---|---|
 | 权威规划 | [`../docs/000-工程规划.md`](../docs/000-工程规划.md)（v0.1，**本工程结论以它为准**） |
 | 运行时契约 | [`../../ohos-node-bridge/docs/000-工程规划.md`](../../ohos-node-bridge/docs/000-工程规划.md) **§6**（库承诺什么 / 消费方必须自建什么） |
-| 本工程实测 | [`../docs/ACL配置.md`](../docs/ACL配置.md) · [`../docs/evidence/2026-10-16-acl-jit-verified.md`](../docs/evidence/2026-10-16-acl-jit-verified.md) |
+| 本工程实测 | [`../docs/ACL配置.md`](../docs/ACL配置.md) · `docs/evidence/2026-10-16-acl-jit-verified.md`（本地留存，不入库） |
 | 版本 / 状态 | v1.0 · 2026-10-16 · **生效** |
 | 适用 | `entry/`（ArkTS 宿主与资源）· `scripts/`（host 侧流水线）· 载荷适配（Node 侧启动脚本）· `resfile/pi-web/` 载荷 · `specs/` |
 

@@ -4,7 +4,7 @@
 > 依据：规划 [`../../docs/000-工程规划.md`](../../docs/000-工程规划.md) **§4 / §5 第 1·2·3·4·5·6·12·13·16 条 / §6.1 / §6.3 / §7.1 / §7.4 / §11 / §12 / §14.2 / §14.3**；
 > 运行时契约 [`../../../ohos-node-bridge/docs/000-工程规划.md`](../../../ohos-node-bridge/docs/000-工程规划.md) **§5.3 / §5.6 / §5.7 / §5.10 / §6.1 / §6.2**；
 > 冻结接口契约 [`../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)（**库侧唯一口径**）；
-> 宪法 [`../constitution.md`](../constitution.md)（A2/A3/A5/A8/A9/A10 为主约束）；本工程实测 [`../../docs/ACL配置.md`](../../docs/ACL配置.md)、[`../../docs/evidence/2026-10-16-acl-jit-verified.md`](../../docs/evidence/2026-10-16-acl-jit-verified.md)。
+> 宪法 [`../constitution.md`](../constitution.md)（A2/A3/A5/A8/A9/A10 为主约束）；本工程实测 [`../../docs/ACL配置.md`](../../docs/ACL配置.md)、`docs/evidence/2026-10-16-acl-jit-verified.md`（本地留存，不入库）。
 > 标注：**✅ 已落地**（带 `path:line`）/ **⬜ 规划未实现（Phase N）** / ⚠️ **与规划冲突或风险**。
 
 ---

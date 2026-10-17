@@ -62,7 +62,7 @@ ohos.permission.FILE_ACCESS_PERSIST
 | 性能 | ✅ 热循环 **6–9 ms / 2e6 次**（同型解释器基线约 59 ms/2e6）⇒ 约 **7–10×** |
 | 崩溃 | ✅ `hilog` 中 `Cpp Crash` **0 条**，应用进程（含 ArkWeb `:gpu`/`:render`）稳定存活 |
 
-> 完整证据（原始 JSON + 复现命令）：[`evidence/2026-10-16-acl-jit-verified.md`](evidence/2026-10-16-acl-jit-verified.md)
+> 完整证据（原始 JSON + 复现命令）：`docs/evidence/2026-10-16-acl-jit-verified.md`（本地留存，不入库）
 
 ### 2.3 复验步骤（Profile 变更后必做）
 
