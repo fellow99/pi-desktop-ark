@@ -1240,6 +1240,7 @@ async function main() {
     const cropCheck = assertCropApplied(tarRoot, stats, plan); // 回归检查：dry run 说裁了，这里必须真裁掉
     await stageBridgeFiles(bridge.files, tarRoot, '入归档');
     await stageBridgeFiles(appPayload.files, tarRoot, '入归档');
+    applyWebBranding(tarRoot);
     console.log(`应用载荷覆盖: 已入归档 ${appPayload.files.length} 个（${APP_PAYLOAD_ENTRIES.join(' / ')}）`);
     console.log(`→ 打包 tar.gz：${stage} → ${DEFAULT_TAR}`);
     const tarFiles = await writeTarGz(stage, DEFAULT_TAR, opts);
@@ -1330,3 +1331,103 @@ main()
     if (err && err.stack) console.error(err.stack);
     process.exit(1);
   });
+
+/**
+ * Web 侧品牌化（需求 `103-branding` 的 `FR-brand-003/004` / 行动项 §K.9 E13）。
+ *
+ * ## 为什么只能在这里做
+ *
+ * 上游 `../pi-web` **一个字节都不能改**（零补丁纪律）⇒ 文案只能在**暂存副本**上换。
+ * 这正是 hos `brand-assets.mjs#applyWebBranding(piDistDir)` 的位置与理由。
+ *
+ * ## 为什么这个替换是安全的（关键判据）
+ *
+ * 用户可见品牌是 **`Pi Web`（首字母大写）**；技术标识是 **`pi-web`（小写）** ——
+ * 包名 `@agegr/pi-web`、localStorage key `pi-web:*`、环境变量 `PI_WEB_*` 都不含大写形式。
+ * 因此**大小写敏感**的 `Pi Web` → `Pi Desktop` 替换天然不会碰 `FR-brand-005` 禁止的标识符。
+ *
+ * ## 判据（硬失败）
+ *
+ * 替换后 `node_modules/` 之外**必须为 0 处** `Pi Web`；否则抛错 —— 绝不出「半品牌化」的包。
+ * `node_modules/` 例外：那是上游第三方代码，属 `FR-brand-005` 允许保留的技术面。
+ *
+ * ## 确定性
+ *
+ * 纯文本替换、无时间戳 ⇒ 同一输入两次 `--apply` 得到同一 SHA-256（与归档幂等键一致）。
+ */
+function applyWebBranding(tarRoot) {
+  const FROM = 'Pi Web';
+  const TO = 'Pi Desktop';
+  /**
+   * 按**内容**判「是不是可替换的文本文件」，不用扩展名白名单。
+   * 理由（实测教训）：`.rsc`（React Server Component 载荷）不在任何白名单里，
+   * 但它**会被发到客户端**且真的含用户可见字符串 —— 白名单会漏，判据就闭不上。
+   * 二进制判据：前 8 KB 出现 NUL 字节即视为二进制，跳过；`.map` 一律跳过。
+   */
+  const readTextOrNull = (abs) => {
+    if (abs.endsWith('.map')) return null;
+    let buf;
+    try {
+      buf = fs.readFileSync(abs);
+    } catch {
+      return null;
+    }
+    const probe = buf.subarray(0, Math.min(8192, buf.length));
+    if (probe.includes(0)) return null;
+    return buf.toString('utf8');
+  };
+  let filesTouched = 0;
+  let occurrences = 0;
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules') continue;   // 第三方代码：技术面，按 FR-brand-005 保留
+        walk(abs);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const text = readTextOrNull(abs);
+      if (text === null || !text.includes(FROM)) continue;
+      const hits = text.split(FROM).length - 1;
+      fs.writeFileSync(abs, text.split(FROM).join(TO), 'utf8');
+      filesTouched += 1;
+      occurrences += hits;
+    }
+  };
+  walk(tarRoot);
+  console.log(`品牌化（Web 文案）: ${FROM} → ${TO}，命中 ${occurrences} 处 / ${filesTouched} 个文件`);
+
+  // 终检：node_modules 之外不得残留
+  const leftovers = [];
+  const scan = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const abs = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules') continue;
+        scan(abs);
+        continue;
+      }
+      const text = readTextOrNull(abs);
+      if (text !== null && text.includes(FROM)) leftovers.push(path.relative(tarRoot, abs));
+    }
+  };
+  scan(tarRoot);
+  if (leftovers.length > 0) {
+    throw new Error(`品牌化终检失败：node_modules 之外仍有 ${leftovers.length} 个文件含「${FROM}」`
+      + `（前 3 个：${leftovers.slice(0, 3).join(', ')}）`);
+  }
+  console.log(`品牌化终检: node_modules 之外「${FROM}」= 0 处 ✓（硬失败判据已通过）`);
+}
