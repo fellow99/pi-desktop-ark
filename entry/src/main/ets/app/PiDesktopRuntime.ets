@@ -31,12 +31,14 @@ import {
   READY_MARKER_INTERVAL_MS,
   READY_MARKER_TIMEOUT_MS,
   READONLY_PAYLOAD_DIR,
-  SANDBOX_DIR_NAME,
+  SandboxRootCheck,
   USER_HOME_DIR,
   WAIT_RUNNING_TIMEOUT_MS,
   appUrl,
+  checkSandboxRoot,
   escapeJson,
-  readyMarkerPath
+  readyMarkerPath,
+  sandboxRoot
 } from '../common/Constants';
 import { HttpProbeResult, PortResolution, Ports } from '../common/Ports';
 import { HostCapabilities } from '../host/HostCapabilities';
@@ -138,6 +140,11 @@ export class PiDesktopRuntime {
    * 进诊断串 —— 建不出来是**必须可见**的事实，不允许只躺在日志里（C2）。
    */
   private workspaceRootsNote: string = '(尚未执行)';
+  /**
+   * 沙箱基座断言的结果（C2）：`ok｜filesDir=…｜沙箱根=…` 或 `MISMATCH｜…`。
+   * 与 `workspaceRootsNote` 分开：前者说的是「基座对不对」，后者说的是「目录建没建出来」。
+   */
+  private sandboxBaseNote: string = '(尚未执行)';
 
   static getInstance(): PiDesktopRuntime {
     if (PiDesktopRuntime.instance === undefined) {
@@ -238,6 +245,8 @@ export class PiDesktopRuntime {
       this.ensureDir(bridgeDir);
       this.ensureDir(context.filesDir + '/' + AGENT_DIR_NAME);
       this.ensureDir(context.filesDir + '/' + CWD_DIR_NAME);
+      // C2：基座断言先于建目录 —— 「沙箱根对不对」和「建没建出来」是两件事
+      this.assertSandboxBase(context);
       // P1a：声明过的沙箱内工作区根（`<base>/workspace` 等）必须在这里建 —— browse API 拒绝代建
       this.ensureDeclaredRoots(context);
     } catch (e) {
@@ -555,11 +564,29 @@ export class PiDesktopRuntime {
    */
   private declaredRoots(context: common.UIAbilityContext): DeclaredRoot[] {
     const roots: DeclaredRoot[] = [];
-    roots.push(new DeclaredRoot('sandbox', '沙箱', context.filesDir + '/' + SANDBOX_DIR_NAME, ''));
+    roots.push(new DeclaredRoot('sandbox', '沙箱', sandboxRoot(context.filesDir), ''));
     roots.push(new DeclaredRoot('desktop', '桌面', USER_HOME_DIR + '/Desktop', 'directory_desktop'));
     roots.push(new DeclaredRoot('documents', '文档', USER_HOME_DIR + '/Documents', 'directory_document'));
     roots.push(new DeclaredRoot('download', '下载', USER_HOME_DIR + '/Download', 'directory_download'));
     return roots;
+  }
+
+  /**
+   * C2：启动时把「沙箱基座」打一次日志并断言。
+   *
+   * 判据（真机缺陷专用）：声明的沙箱根必须以 `context.filesDir` 为前缀。
+   * 少了 `haps/<module>` 的 `/data/storage/el2/base/files/workspace` 会在这里
+   * 以 `Log.error` 出现，而不是只在用户点开目录选择器时表现为 404。
+   */
+  private assertSandboxBase(context: common.UIAbilityContext): void {
+    const declared: string = sandboxRoot(context.filesDir);
+    const check: SandboxRootCheck = checkSandboxRoot(context.filesDir, declared);
+    if (check.ok) {
+      Log.info('沙箱基座：' + check.message);
+    } else {
+      Log.error('沙箱基座断言失败：' + check.message);
+    }
+    this.sandboxBaseNote = (check.ok ? 'ok' : 'MISMATCH') + '｜' + check.message;
   }
 
   /** 工作区主目录清单（与 `payload/env.js` 的兜底清单同形；选择器结果就绪后由它接管） */
@@ -662,6 +689,7 @@ export class PiDesktopRuntime {
       + '"url":"' + escapeJson(this.getUrlOrPending()) + '",'
       + '"hostCapabilities":"' + escapeJson(this.hostSummary) + '",'
       + '"workspaceRoots":"' + escapeJson(this.workspaceRootsNote) + '",'
+      + '"sandboxBase":"' + escapeJson(this.sandboxBaseNote) + '",'
       + '"capabilities":' + HostCapabilities.capabilitiesJson() + ','
       + '"node":{"state":"' + state + '","stage":"' + stage + '","bridgeVersion":"' + bridgeVersion + '"'
       + ',"pid":' + pid + ',"isRunning":' + (isRunning ? 'true' : 'false') + ',"lastError":"' + lastError + '"'

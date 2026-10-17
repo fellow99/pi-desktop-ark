@@ -83,7 +83,7 @@ export const ENV_WEB_PASSWORD: string = 'PI_WEB_PASSWORD';
 
 /** pi 数据与扩展根（相对 HOME） */
 export const AGENT_DIR_NAME: string = 'pi-agent';
-/** 沙箱工作区根（相对 HOME；选择工作区目录的第一个 Tab） */
+/** 沙箱工作区根目录名（相对 `context.filesDir`；选择工作区目录的第一个入口） */
 export const SANDBOX_DIR_NAME: string = 'workspace';
 /** 鸿蒙 2in1 的用户目录挂载点（授权后可用；未授权时对话框如实报 EPERM） */
 export const USER_HOME_DIR: string = '/storage/Users/currentUser';
@@ -133,10 +133,53 @@ export function appUrl(port: number): string {
 export function readyMarkerPath(filesDir: string): string {
   return `${filesDir}/${PAYLOAD_DIR}/${READY_MARKER_NAME}`;
 }
-
 /** 载荷自己的日志路径（app.log；诊断面板与「请重启应用」提示都指向它） */
 export function appLogPath(filesDir: string): string {
   return `${filesDir}/${PAYLOAD_DIR}/${APP_LOG_NAME}`;
+}
+
+/**
+ * 沙箱工作区根的**唯一派生点**（`<context.filesDir>/workspace`）。
+ *
+ * 为什么必须集中：这个路径有三个消费者 —— 声明的根清单（`PI_HOS_ROOTS` 的 sandbox 项）、
+ * 启动时建目录、断言日志。任何一处自己拼基座都可能拼出**少了 `haps/<module>` 的**
+ * `/data/storage/el2/base/files/workspace`（真机现场：`GET /api/cwd/browse?path=…` → 404，
+ * 用户只能手打绝对路径）。基座只有一个：`context.filesDir`（= `…/haps/<module>/files`）。
+ */
+export function sandboxRoot(filesDir: string): string {
+  return `${filesDir}/${SANDBOX_DIR_NAME}`;
+}
+
+/** C2 断言结果（ArkTS 不接受匿名结构体，显式建模；`ok=false` 时必须打日志，不许静默） */
+export class SandboxRootCheck {
+  readonly ok: boolean;
+  readonly message: string;
+
+  constructor(ok: boolean, message: string) {
+    this.ok = ok;
+    this.message = message;
+  }
+}
+
+/**
+ * C2：声明的沙箱根必须**落在 `filesDir` 之内**。
+ *
+ * 这条断言专门抓一类真机缺陷：基座取错一层（拿 `…/el2/base` 当基座再加 `/files`），
+ * 于是得到 `…/el2/base/files/workspace` —— 它**不是** `filesDir` 的前缀关系，
+ * 目录也不存在。断言失败时不抛（启动不能因为一条自检而中止），但必须 `Log.error`
+ * 进 hilog / 诊断串，让「选择器里的沙箱进不去」当场可归因。
+ */
+export function checkSandboxRoot(filesDir: string, declaredRoot: string): SandboxRootCheck {
+  const base: string = filesDir.endsWith('/') ? filesDir.substring(0, filesDir.length - 1) : filesDir;
+  const text: string = 'filesDir=' + base + '｜沙箱根=' + declaredRoot;
+  if (base.length === 0) {
+    return new SandboxRootCheck(false, 'filesDir 为空（上下文不可用？）：' + text);
+  }
+  if (declaredRoot === base || declaredRoot.startsWith(base + '/')) {
+    return new SandboxRootCheck(true, text);
+  }
+  return new SandboxRootCheck(false,
+    '沙箱根不在 filesDir 之内（基座取错：少了 haps/<module> 或用了别的目录）：' + text);
 }
 
 /** JSON 字符串转义（手写：诊断/能力桥的 JSON 全部由字符串拼装，绝不让引号破坏结构） */

@@ -76,6 +76,39 @@ function buildNoProxy(base, extra) {
 }
 
 /**
+ * 宿主声明的沙箱根 id（与 ArkTS 侧 `declaredRoots()` 的第一项、pi-web 补丁里的
+ * `WORKSPACE_ROOT_ID_SANDBOX` 同一个字面量）。
+ */
+const SANDBOX_ROOT_ID = 'sandbox';
+
+/** 词法「在根之内」判定（相等或以 `根/` 为前缀；带分隔符边界） */
+function isInsideRoot(rootPath, targetPath) {
+  const root = String(rootPath).replace(/\/+$/, '');
+  if (!root) return false;
+  return targetPath === root || targetPath.startsWith(`${root}/`);
+}
+
+/**
+ * C2：**沙箱根必须落在 HOME 之内**。
+ *
+ * HOME 是应用自己的沙箱根（库注入的 `filesDir`）。真机上出现过的缺陷是基座少一层
+ * （`…/el2/base/files/workspace`，缺了 `haps/<module>`）：它仍然「看起来像」沙箱路径，
+ * 但既不在 HOME 之内、目录也不存在，表现为目录选择器的「沙箱」入口 404。
+ * 因此这里做的是**基座一致性检查**，而不是可读性检查（可读性属宿主/ACL 的事）。
+ *
+ * 只查 sandbox 一项：桌面/文档/下载三个根本来就在 `/storage/Users/currentUser/…`，
+ * 落在 HOME 之外是设计使然。
+ */
+function sandboxRootOutsideHome(roots, home) {
+  const sandbox = roots.find((root) => root && root.id === SANDBOX_ROOT_ID);
+  if (!sandbox) return `缺少 id=${SANDBOX_ROOT_ID} 的根`;
+  const path = typeof sandbox.path === 'string' ? sandbox.path : '';
+  if (!path) return `id=${SANDBOX_ROOT_ID} 的 path 为空`;
+  if (!isInsideRoot(home, path)) return `${SANDBOX_ROOT_ID}=${path}（不在 HOME=${home} 之内）`;
+  return null;
+}
+
+/**
  * 工作区主目录清单（host 已给出就原样保留 —— 选择器的结果是权威来源）。
  *
  * F2：清单缺失/非法时构造的兜底四项**不是用户的选择**，必须能被程序分辨：
@@ -90,7 +123,15 @@ function buildRoots(base, home, warn) {
   if (inherited !== undefined) {
     try {
       const parsed = JSON.parse(inherited);
-      if (Array.isArray(parsed) && parsed.length > 0) return { value: inherited, fallback: false };
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // C2：沙箱根必须与 HOME（应用沙箱）同基座，否则当场说出来（不静默、不改写）
+        const outside = sandboxRootOutsideHome(parsed, home);
+        if (outside !== null) {
+          warn(`${KEYS.roots} 的沙箱根与 HOME 不同基座：${outside}`
+            + '；沙箱根必须由宿主按 context.filesDir 派生（形如 …/haps/<module>/files/workspace）');
+        }
+        return { value: inherited, fallback: false };
+      }
       warn(`${KEYS.roots} 不是非空数组，改用沙箱兜底清单`);
     } catch (err) {
       warn(`${KEYS.roots} 不是合法 JSON（${err && err.message}），改用沙箱兜底清单`);
