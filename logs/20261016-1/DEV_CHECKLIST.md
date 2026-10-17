@@ -710,3 +710,22 @@ sys 1792216464785 [node_bridge] SIGSYS 自检汇总 t=3s 采样=5 差异=0 处�
 - §R4.5 第 3 条「没有取到『处置被外部改写』的日志行」——本轮取到了**主动自检的观测结果**
   （`ours`），但**仍未**观测到任何「被外部改写」的事实（含历史启动 0 次）；这不等于「libuv 顶不掉」，
   只等于「在本轮观测窗内没顶掉」。口径见 R5.2 与库侧 REVIEW_REPORT §R3。
+
+### 归档确定性复核（第 3 次，**用已提交的脚本**再跑一遍）
+
+```
+$ node scripts/assemble-payload.mjs --route tar --apply --force --pi-web-node <node22>
+上游补丁    : 0001-terminal-capability-unsupported.patch → pi-web@v0.12.1（往返校验通过：2 文件 SHA-256 还原）
+载荷断言    : .next/server/app/api/terminal/route.js 已含「terminal.pty」✔（无需重新编译）
+暂存文件    : 27165 /    375100350 B  (357.7 MiB)
+归档大小    :     84888579 B  (81.0 MiB)
+SHA-256     : 1f85d684b3e0cbdbd4c68cd77f8bedfbc9a20fb8efb28e850428e980a60bcd6d
+上游补丁    : 已还原 pi-web pristine（0001-terminal-capability-unsupported.patch）
+✓ 组装完成      （14:03:37 → 14:17:30，EXIT=0；之后 `git -C ../pi-web status --porcelain` 为空）
+```
+
+- 第 3 次与第 1/2 次 **sha256 逐字节相同**（三次同 sha `1f85d684b3e0…`），且这次由**脚本自己**把
+  pi-web 还原成 pristine（前两次的还原接线是后补的，`revertPiWebPatchesOnce()` 只在收尾/失败/异常三处调用）。
+- **失败路径也已实测**：拿一条 `git apply --check` 失败的补丁（改坏上下文行）跑同一命令 →
+  `✗ 上游补丁阶段失败：补丁与当前 pi-web 工作树冲突，中止（不得 --3way）…` `EXIT=2`，
+  **不产生暂存目录、不写归档**，`../pi-web` 保持 pristine。
