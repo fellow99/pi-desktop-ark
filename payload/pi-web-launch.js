@@ -447,11 +447,14 @@ function registerShutdownHook(payloadRoot) {
       if (wired) {
         probeHostBridge(host);
       }
+      // 这里**不再**写死通道名（原先写「callHost … 100 ms 轮询泵」，在换成文件信箱后
+      // 就成了误导）：具体通道由上一行 `宿主桥传输已接线：…` 说明，这一行只说结论。
       log(`已向宿主桥注册 shutdown 钩子（${candidate}）；传输层 = `
         + (wired
-          ? 'callHost（Node→ArkTS 已接线，ArkTS 侧 100 ms 轮询泵）'
-          : 'transport-unavailable（原生桥没加载上 ⇒ 宿主调用会 reject，**不是**静默失败）'));
+          ? '已接线（通道与方向见上一行）'
+          : 'transport-unavailable（信箱与原生都没接上 ⇒ 宿主调用会 reject，**不是**静默失败）'));
       return true;
+
     } catch (err) {
       logWarn(`加载宿主桥客户端失败 ${candidate}：${describeError(err)}`);
     }
@@ -475,8 +478,31 @@ function registerShutdownHook(payloadRoot) {
  * 全部失败 ⇒ 返回 false 并明说「宿主能力不可达」，绝不假装接线成功。
  */
 function wireHostTransport(host) {
+  /*
+   * ① 文件信箱（E18 主路）：`PI_HOST_MAILBOX` 由应用侧（`PiDesktopRuntime.buildAppEnv`）给出，
+   *    指向 `<filesDir>/host-mailbox`；ArkTS 侧 `HostBridge.startMailbox()` 每 100 ms 轮询它。
+   *
+   *    为什么它排第一：原生两条路都实测不通（见 `host.js` 文件头），而文件信箱
+   *    两侧同 UID、同文件系统视图，每个中间态都是可 `hdc shell cat` 的文件。
+   *    这里**不**吞失败：`useFileMailbox` 返回结构化结果，原因原样进 app.log。
+   */
+  const mailboxDir = process.env.PI_HOST_MAILBOX || '';
+  if (mailboxDir.length > 0 && typeof host.useFileMailbox === 'function') {
+    const wired = host.useFileMailbox(mailboxDir);
+    if (wired.ok) {
+      log(`宿主桥传输已接线：**文件信箱** ${wired.dir}（Node 写 .req → ArkTS 每 ${wired.pollMs} ms`
+        + ` 轮询 → .done/.fail；方向 Node→ArkTS）`);
+      return true;
+    }
+    logWarn(`文件信箱不可用（${wired.error}）：${wired.detail} —— 回落到原生 addon 尝试`);
+  } else if (mailboxDir.length === 0) {
+    log('未设置 PI_HOST_MAILBOX（应用侧未注入信箱目录）⇒ 不启用文件信箱传输');
+  } else {
+    logWarn('宿主桥客户端没有 useFileMailbox（库的 payload/host.js 版本过旧）：不启用文件信箱传输');
+  }
+  // ② 原生通道（保留为可选路：专用 addon 补齐链接闭包后才可能通，见 docs/002 §4.3）
   if (typeof host.setTransport !== 'function') {
-    logWarn('宿主桥客户端没有 setTransport（库版本过旧）：传输层不可接线');
+    logWarn('宿主桥客户端没有 setTransport（库版本过旧）：原生传输层也不可接线');
     return false;
   }
   const libDir = process.env.NODE_BRIDGE_LIBDIR || '';
@@ -522,8 +548,14 @@ function wireHostTransport(host) {
 }
 
 /**
- * E18 验收探针：一次真实往返（`runtime.facts`）。
- * 结果只进 `app.log`（可 grep `宿主桥往返`），成功/失败都留痕。
+ * E18 验收探针：**两条路都要走一遍**，成功/失败都留痕（可 grep `宿主桥往返`）。
+ *
+ *   ① `runtime.facts` —— 真实能力，验证「请求到达 ArkTS、处理器返回、结果回到 Node」
+ *      整条链；日志里带 state/pid/bridgeVersion 这些**只有 ArkTS 知道**的值，
+ *      所以"成功"不可能是本地伪造。
+ *   ② 一个**必定**不存在的名字 —— 验证失败路径是「结构化错误」而不是超时或空值：
+ *      期望 `unregistered`。若它反而成功，说明 `dispatch()` 的分派口径坏了；
+ *      若它超时，说明 `.fail` 那条通道没通。两种都必须当场在日志里显形。
  */
 function probeHostBridge(host) {
   host.invoke('runtime.facts', {}).then((facts) => {
@@ -536,6 +568,17 @@ function probeHostBridge(host) {
     log(`宿主桥往返成功（runtime.facts）：${brief}`);
   }).catch((err) => {
     logWarn(`宿主桥往返失败（runtime.facts）：${describeError(err)}`);
+  });
+  // 失败路径探针：名字故意不存在。期望 reject 且 code=unregistered。
+  host.invoke('__probe.definitely-not-registered__', {}).then(() => {
+    logWarn('宿主桥失败路径**不符合预期**：未注册的能力竟然返回成功 ⇒ dispatch 分派口径有问题');
+  }).catch((err) => {
+    const code = err !== null && typeof err === 'object' && err.error ? String(err.error) : '(none)';
+    if (code === 'unregistered') {
+      log(`宿主桥失败路径符合预期（未注册能力 → 结构化 unregistered，走 .fail 通道）`);
+    } else {
+      logWarn(`宿主桥失败路径的**错误码不对**：期望 unregistered，实得 ${code}（${describeError(err)}）`);
+    }
   });
 }
 

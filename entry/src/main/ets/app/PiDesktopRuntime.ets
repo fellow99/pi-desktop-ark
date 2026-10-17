@@ -31,6 +31,8 @@ import {
   READY_MARKER_INTERVAL_MS,
   READY_MARKER_TIMEOUT_MS,
   READONLY_PAYLOAD_DIR,
+  HOST_MAILBOX_DIR_NAME,
+  ENV_HOST_MAILBOX,
   SandboxRootCheck,
   USER_HOME_DIR,
   WAIT_RUNNING_TIMEOUT_MS,
@@ -243,6 +245,8 @@ export class PiDesktopRuntime {
       this.ensureDir(payloadDir);
       this.ensureDir(tmpDir);
       this.ensureDir(bridgeDir);
+      // E18：宿主桥文件信箱目录（Node 写 .req / ArkTS 泵读它）；两侧同路径、同 UID
+      this.ensureDir(context.filesDir + '/' + HOST_MAILBOX_DIR_NAME);
       this.ensureDir(context.filesDir + '/' + AGENT_DIR_NAME);
       this.ensureDir(context.filesDir + '/' + CWD_DIR_NAME);
       // C2：基座断言先于建目录 —— 「沙箱根对不对」和「建没建出来」是两件事
@@ -270,8 +274,24 @@ export class PiDesktopRuntime {
       this.invalidateReadyMarker(context);
     }
 
-    // 宿主能力桥：**投递之前**注册（Phase 1 传输不可用，但注册面必须先对）
-    this.hostSummary = HostCapabilities.install(runtime, context);
+    /*
+     * E18：**在投递之前**把信箱泵起起来。
+     *
+     * 顺序不能反：Node 一侧的 `pi-web-launch.js` 拿到 `PI_HOST_MAILBOX` 后会立刻
+     * `useFileMailbox()`，并在启动期做一次真实往返探针（`runtime.facts`）。
+     * 泵晚于 Node 起来 ⇒ 那次探针的 `.req` 会先在目录里等人 —— 不会丢（下次轮询就取到），
+     * 但会把「首启探针耗时」计入 100~200 ms 的额外等待；先起泵就没有这段。
+     *
+     * 失败不阻断启动：`startMailbox` 如实返回 `refused:*` 串，Node 侧届时会报
+     * `transport-unavailable` / `timeout`（结构化、可 grep），**不会**静默成功。
+     */
+    const mailboxDir: string = context.filesDir + '/' + HOST_MAILBOX_DIR_NAME;
+
+    const mailboxState: string = runtime.host.startMailbox(mailboxDir, 100);
+    Log.info('宿主信箱：' + mailboxState);
+    // 宿主能力桥：**投递之前**注册（注册面先对，传输才有东西可分发）
+    this.hostSummary = HostCapabilities.install(runtime, context)
+      + '｜信箱' + (mailboxState.startsWith('started') ? '已启动' : '未启动（' + mailboxState + '）');
     this.lastError = '';
     this.setStage('投递 Node（dlopen + node::Start，在库的 detached 线程里）');
     Log.info('launch: flags=' + flags + ' route=' + plan.route + ' entry=' + plan.entry
@@ -554,6 +574,10 @@ export class PiDesktopRuntime {
     // 路线 ①：只监听 loopback（同进程本地服务，无需再走局域网），端口 0 = 让 Node 侧探空闲端口（⑰）
     env[ENV_WEB_HOSTNAME] = '127.0.0.1';
     env[ENV_WEB_PORT] = String(Ports.resolvePort(0));
+    // E18：宿主桥文件信箱目录。与上面的 `PI_*` 不同，这一项**不属于** pi-web 的 env 契约
+    // （`payload/env.js` 的 KEYS 只管 pi 自己消费的变量）——它是**库的传输通道**，
+    // 值只由应用侧给出（库不解释沙箱路径，C1）；Node 侧 `host.js` 与 ArkTS 侧泵读同一个串。
+    env[ENV_HOST_MAILBOX] = context.filesDir + '/' + HOST_MAILBOX_DIR_NAME;
     return env;
   }
 

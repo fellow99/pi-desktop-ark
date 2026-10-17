@@ -80,6 +80,21 @@ export const ENV_APP_NAME: string = 'PI_WEB_APP_NAME';
 export const ENV_WEB_HOSTNAME: string = 'PI_WEB_HOSTNAME';
 export const ENV_WEB_PORT: string = 'PI_WEB_PORT';
 export const ENV_WEB_PASSWORD: string = 'PI_WEB_PASSWORD';
+/**
+ * 宿主桥文件信箱目录（`PI_HOST_MAILBOX`）。
+ *
+ * 这不是 pi-web 的变量，所以**不进** `payload/env.js` 的 `KEYS`（那份只管 pi 自己消费的
+ * `PI_*`）；它和 `NODE_BRIDGE_LIBDIR` 同一类：**库的传输通道**，值由应用侧给出
+ * （库不解释沙箱路径，C1）。两侧读同一个字符串：Node 侧 `host.js`、ArkTS 侧 `startMailbox`。
+ */
+export const ENV_HOST_MAILBOX: string = 'PI_HOST_MAILBOX';
+/**
+ * 信箱目录名（相对 `context.filesDir`）。
+ *
+ * 为什么放在 `filesDir` 而不是 `cacheDir`：`hdc shell` 对 `files` 可读、对 `cacheDir` 不可读
+ * （真机实测），而"每个中间态都能被 cat 出来"正是这条传输唯一的诊断优势。
+ */
+export const HOST_MAILBOX_DIR_NAME: string = 'host-mailbox';
 
 /** pi 数据与扩展根（相对 HOME） */
 export const AGENT_DIR_NAME: string = 'pi-agent';

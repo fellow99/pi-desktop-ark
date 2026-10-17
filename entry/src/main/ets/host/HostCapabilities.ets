@@ -132,7 +132,11 @@ export class HostCapabilities {
       + '"logPath":"' + escapeJson(runtime.getLogPath()) + '",'
       + '"lastError":"' + escapeJson(runtime.getLastError()) + '",'
       + '"logEntries":' + logs + ','
-      + '"hostBridge":' + escapeJson(runtime.host.stats()) + ','
+      // 【必须带引号】`escapeJson` 只转义、**不加**包裹引号：少了这一对引号，产出是
+      // `"hostBridge":{"\"count\":8,…` —— 合法 JSON 的前缀 + 一个非法位置，
+      // 而 `JSON.parse` 的报错位置（position 282）离真正的原因（缺引号）并不直观。
+      // 这个缺陷一直休眠到 E18 的传输打通才暴露（此前永远走不到解析这一步）。
+      + '"hostBridge":"' + escapeJson(runtime.host.stats()) + '",'
       + '"args":"' + escapeJson(argsJson) + '",'
       + '"capabilities":' + HostCapabilities.capabilitiesJson()
       + '}';
