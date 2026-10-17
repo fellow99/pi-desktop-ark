@@ -28,7 +28,7 @@
 | 鉴权 | **路线 ① loopback 免密（首选）**；路线 ② 局域网 + 密码 + Cookie 注入（回退） | 本地服务访问控制 | ①：只监听 `127.0.0.1` + 不设 `PI_WEB_PASSWORD` ⇒ 上游直接放行（✅ `pi-web/proxy.ts:42-47`）；②：`v1.<exp>.<nonce>.<HMAC-SHA256(密码)>` 会话 cookie 对 `/api/*` 同样生效（✅ `proxy.ts:50-70`、`lib/web-auth.ts`），壳只做 Cookie 写入 |
 | 构建链 | **DevEco Studio 6.1 / command-line-tools `hvigorw` / ohos-sdk（API 26 设备）**，`useNormalizedOHMUrl: true`，`nativeLib.collectAllLibs: true` | 出 HAP | 与库同一条链（规划 §14.3）；OHM 归一化是必需项（否则跨 HAR 符号解析不一致）；module 级 `nativeLib` **不吃** `abiFilters`（✅ 踩坑） |
 | 签名 | **DevEco 生成的调试证书/Profile（与 `bundleName` 绑定）** + 含 3 项 ACL 的 Profile | 装机与 ACL 生效 | 自签 OpenHarmony 证书被 HarmonyOS 真机拒（`fail to verify pkcs7 file`，库 §D.7）⇒ 只能用 DevEco/AGC 链路；材料**不入库**（宪法 T3） |
-| 目标设备 | **2in1 / tablet，arm64-v8a**；真机 **HAD-W32 / HarmonyOS 6.1.0 / API 26** | 运行目标 | 不做 phone、不做 x86_64（规划 §0.3/§1） |
+| 目标设备 | **2in1 / tablet，arm64-v8a**；真机 **HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / OpenHarmony-7.0.0.105 / API 26** | 运行目标 | 不做 phone、不做 x86_64（规划 §0.3/§1） |
 | 观测/取证 | **`hdc`**：`snapshot_display`（截图）、`uitest uiInput`（点按）、`rport`（日志回传）、`hilog`、`fport` + `curl /facts` `/log` | 真机判据 | 旧壳与本工程共同结论：`uitest dumpLayout` 在本机拿不到结果 ⇒ 判据改走 HTTP 端点（✅ 库 §D.8；规划 附录 A） |
 | host 侧脚本 | **Bash（Git-Bash）+ Node** | 构建/投放/取证 | 与库的 `tools/provision.mjs`（Node）统一；`hvigorw.bat` 经 `cmd //c` 调用 |
 
@@ -63,7 +63,7 @@
 | 运行时产物锁 | `ohos-node-bridge/runtime.lock.json`：`libnode.so` SHA-256 `3019bf5f…51a1`、`libc++_shared.so` SHA-256 `388e0df2…b2f9` | ✅ 库 §D.9 + 本工程 HAP 内核对（规划 附录 B #2） |
 | 上游 | `pi`（`engines.node >= 22.19.0`）、`pi-web`（`next 16.3.8`、`react ^19.2.4`、`engines.node >= 22.19.0`） | ✅ `pi/package.json:70-71`、`pi-web/package.json:61` |
 | 构建产物 | `entry-default-signed.hap` **129,347,874 B**（未签名 128,255,687 B） | ✅ 本机 `entry/build/default/outputs/default/` + `docs/evidence/…` |
-| 设备 | HAD-W32（HUAWEI MateBook Pro）/ HarmonyOS 6.1.0 / API 26 / arm64-v8a；序列号 `3QC0226526001227` | ✅ 本机真机记录 |
+| 设备 | HAD-W24（HUAWEI MateBook Pro）/ 7.0.0.107(SP7C00E100R13P5) / OpenHarmony-7.0.0.105 / API 26 / arm64-v8a；序列号 `3QC0226526001227` | ✅ 本机真机记录 |
 | 工具链路径 | `DEVECO_SDK_HOME=D:\oh-workspace\command-line-tools\sdk`、`hvigorw.bat`、`hdc.exe`（DevEco sdk 的 `toolchains/`） | ✅ 规划 §14.3/附录 A |
 | 库 | `@fellow99/node-bridge` version `0.1.0`（本地 HAR，441,353 B） | ✅ `oh-package-lock.json5` |
 

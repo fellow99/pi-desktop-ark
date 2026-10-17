@@ -14,7 +14,7 @@
 | 数据面 | 同源 HTTP + SSE：`/`（SPA）、`/api/*`、SSE；零 CORS、零头改写、零 IPC 载体 |
 | 运行时 | Node **v24.2.0**（`platform=openharmony`、`modules=137`），产物锁在 `ohos-node-bridge/runtime.lock.json` |
 | 上游载荷 | `pi-web`（Next 16.3.8 非 standalone）+ `pi` agent；设备侧 SWC 只能走 WASM |
-| 设备 | HAD-W32 / HarmonyOS 6.1.0 / API 26 / arm64-v8a；`2in1` + `tablet` |
+| 设备 | HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / API 26 / OpenHarmony-7.0.0.105 / arm64-v8a；`2in1` + `tablet` |
 | 权限 | 声明面 24 `requestPermissions` + 2 `definePermissions` + `taskKeeping`；**3 项 ACL** 已获批并进 Profile |
 | 已实证结论 | ACL 生效 ⇒ 无 `Cpp Crash`、`wasm.available/validate=true`、热循环 **6–9 ms/2e6**；端口冲突 ⇒ 整进程 abort；`dup2` 日志混流 |
 | 当前产物 | 签名 HAP **129,347,874 B**；载荷（`pi-dist`）**尚未接入**（`resfile/pi-web/` 仅 README） |

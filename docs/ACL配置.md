@@ -24,7 +24,7 @@
 > 探针实测（`ohos-node-bridge/docs/000-工程规划.md` §D.8）：声明 `kernel.EXEMPT_ANONYMOUS_EXECUTABLE_MEMORY`
 > 等**开放权限不能替代**第 1 项 —— 仍 SIGTRAP。故第 1 项是刚性前置。
 
-## 2. 装机与授权：两次实测（2026-10-16，HAD-W32）
+## 2. 装机与授权：两次实测（2026-10-16，HAD-W24）
 
 ### 2.1 第一次：Profile 不含 ACL ⇒ **装机直接被拒**
 

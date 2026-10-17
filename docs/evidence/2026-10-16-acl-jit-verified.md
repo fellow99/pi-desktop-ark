@@ -1,6 +1,6 @@
 # 真机验证：ACL 生效（JIT 可用）—— 2026-10-16
 
-- **设备**：HAD-W32 / HarmonyOS 6.1.0 / API 26 / arm64-v8a（`3QC0226526001227`）
+- **设备**：HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / API 26 / OpenHarmony-7.0.0.105 / arm64-v8a（`3QC0226526001227`）
 - **应用**：`org.fellow99.pi.PiDesktopArk` v0.1.0（DevEco 调试签名，Profile 含 3 项 ACL）
 - **构建**：`entry-default-signed.hap`（129,347,874 B），内含 `libnode.so`（SHA-256 = `runtime.lock.json`）、`libnode_bridge.so`（来自 `@fellow99/node-bridge` HAR）
 

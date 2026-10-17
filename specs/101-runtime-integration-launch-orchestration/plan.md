@@ -14,7 +14,7 @@
 | 项 | 值 | 依据 |
 |---|---|---|
 | 宿主形态 | ArkTS Stage 模型单模块应用（`entry`），设备类型 `2in1` / `tablet`；唯一页面 `pages/Index` | ✅ `entry/src/main/module.json5:7-10`、`entry/src/main/resources/base/profile/main_pages.json` |
-| 真机基线 | HAD-W32 / HarmonyOS 6.1.0 / API 26 / arm64-v8a；序列号 `3QC0226526001227` | ✅ `docs/evidence/2026-10-16-acl-jit-verified.md` |
+| 真机基线 | HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / API 26 / OpenHarmony-7.0.0.105 / arm64-v8a；序列号 `3QC0226526001227` | ✅ `docs/evidence/2026-10-16-acl-jit-verified.md` |
 | API 口径 | `compatibleSdkVersion 5.0.5(17)`、`targetSdkVersion 6.1.1(24)`；⚠️ 与规划「API 26」口径不一致 | ⚠️ `build-profile.json5:33-36`、`AppScope/app.json5:11-12`（登记于 `../STRUCTURE.md` §2.1） |
 | 消费的库 | `@fellow99/node-bridge` **0.1.0**，以**构建好的 HAR**（441,353 B）经 `file:` 依赖接入 | ✅ `oh-package.json5:12`、`oh-package-lock.json5:14-20`、宪法 T7 |
 | 运行时产物 | `libnode.so` **126,809,264 B**（Node v24.2.0，SHA-256 `3019bf5f…51a1`）+ `libc++_shared.so` **1,262,504 B**（`388e0df2…b2f9`），由锁文件固化 | ✅ `entry/libs/arm64-v8a/`、库 `runtime.lock.json`（库 §D.9） |

@@ -3,7 +3,7 @@
 **项目名称：** `pi-desktop-ark` · **应用名 / 包名：** **Pi Desktop V2** / `org.fellow99.pi.PiDesktopArk`
 **需求：** **000-scaffold 工程搭建** · **规范文档存放目录：** `specs/`
 **版本：** `v0.1`（规划 2026-10-16；Phase 0 骨架 + 关键实证已完成，Phase 1 进行中）
-**目标设备：** `2in1` / `tablet`（真机 HAD-W32 · HarmonyOS 6.1.0 · API 26 · arm64-v8a）；**不做 phone、不做 x86_64**
+**目标设备：** `2in1` / `tablet`（真机 HAD-W24 · 7.0.0.107(SP7C00E100R13P5) · OpenHarmony-7.0.0.105 · API 26 · arm64-v8a）；**不做 phone、不做 x86_64**
 **技术栈：** ArkTS 宿主（UIAbility + **ArkWeb**）+ `@fellow99/node-bridge`（进程内 `dlopen` + `node::Start`，Node v24.2.0，见[库文档](../../ohos-node-bridge/docs/000-工程规划.md)）+ 端上 `pi-web` 服务端（同源 HTTP + SSE）+ 同名工具扩展（纯 JS）；**不带任何 Chromium/Electron**
 **文档生成时间：** 2026-10-16 · **最后更新：** 2026-10-16
 

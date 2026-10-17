@@ -14,7 +14,7 @@
 | 项 | 值 | 依据 |
 |---|---|---|
 | 运行环境 | ArkTS Stage 模型；`2in1` / `tablet`；唯一页面 `pages/Index`（路由表固定） | ✅ `entry/src/main/resources/base/profile/main_pages.json`、`../STRUCTURE.md` §3 |
-| 设备基线 | HAD-W32 / HarmonyOS 6.1.0 / API 26 / arm64-v8a；`targetSdkVersion 6.1.1(24)`（⚠️ 与「API 26」口径差异见 `../STRUCTURE.md` §2.1） | ✅ `docs/evidence/2026-10-16-acl-jit-verified.md` |
+| 设备基线 | HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / API 26 / OpenHarmony-7.0.0.105 / arm64-v8a；`targetSdkVersion 6.1.1(24)`（⚠️ 与「API 26」口径差异见 `../STRUCTURE.md` §2.1） | ✅ `docs/evidence/2026-10-16-acl-jit-verified.md` |
 | 渲染组件 | `Web`（ArkWeb）：当前 `src: $rawfile('boot.html')` + `javaScriptAccess(true)` + `domStorageAccess(true)` | ✅ `pages/Index.ets:107-110` |
 | 就绪后行为 | `controller.loadUrl(PiDesktopRuntime.getInstance().getUrl())`（`http://127.0.0.1:<port>/`） | ✅ `pages/Index.ets:58-61` |
 | 首屏资源 | 应用内加载页（标题 + 阶段文案 + 进度动画 + 说明） | ✅ `resources/rawfile/boot.html`（30 行） |
