@@ -442,8 +442,15 @@ function registerShutdownHook(payloadRoot) {
       host.handle('shutdown', async () => {
         await closeServer('host-bridge');
       });
-      log(`已向宿主桥注册 shutdown 钩子（${candidate}；Phase 1 传输为 transport-unavailable，`
-        + '宿主调用**不会**到达本进程 —— 这是如实记录，不是失败掩盖）');
+      // E18：传输层接线（Node → ArkTS）+ 一次真实往返探针（结果进 app.log，可 grep）
+      const wired = wireHostTransport(host);
+      if (wired) {
+        probeHostBridge(host);
+      }
+      log(`已向宿主桥注册 shutdown 钩子（${candidate}）；传输层 = `
+        + (wired
+          ? 'callHost（Node→ArkTS 已接线，ArkTS 侧 100 ms 轮询泵）'
+          : 'transport-unavailable（原生桥没加载上 ⇒ 宿主调用会 reject，**不是**静默失败）'));
       return true;
     } catch (err) {
       logWarn(`加载宿主桥客户端失败 ${candidate}：${describeError(err)}`);
@@ -452,6 +459,71 @@ function registerShutdownHook(payloadRoot) {
   logWarn('未找到库的 payload/host.js（库尚未投放该文件？）：跳过关停钩子注册，'
     + '进程退出时监听端口由内核回收（与旧壳拿不到 server 句柄时的口径一致）');
   return false;
+}
+
+/**
+ * 接线宿主桥传输（**Node → ArkTS**）。
+ *
+ * 做法：`process.dlopen` 加载同一个 `libnode_bridge.so` 到 **Node 的 napi env**，拿它的
+ * `callHost(name, argsJson)`，注册成 `host.setTransport(fn)` 的传输函数。
+ *
+ * 为什么不是「随便 require 一个 addon」：这个 .so 已被 ArkTS 侧 import（RTLD_GLOBAL），
+ * 再加载到 Node env 时 `napi_module_register` 会被**用 Node 的 env 再调一次** —— 这正是我们要的：
+ * ArkTS 用 `pollHostRequest/completeHostRequest`，Node 用 `callHost`，两侧共用同一份槽位表。
+ *
+ * 路径：`NODE_BRIDGE_LIBDIR`（库在 envPairs 里给）→ 绝对路径；失败再试裸名（已加载对象按名匹配）。
+ * 全部失败 ⇒ 返回 false 并明说「宿主能力不可达」，绝不假装接线成功。
+ */
+function wireHostTransport(host) {
+  if (typeof host.setTransport !== 'function') {
+    logWarn('宿主桥客户端没有 setTransport（库版本过旧）：传输层不可接线');
+    return false;
+  }
+  const libDir = process.env.NODE_BRIDGE_LIBDIR || '';
+  const candidates = [];
+  if (libDir.length > 0) candidates.push(path.join(libDir, 'libnode_bridge.so'));
+  candidates.push('libnode_bridge.so');
+  const Module = require('node:module');
+  for (const file of candidates) {
+    try {
+      const holder = new Module(file);
+      holder.filename = file;
+      process.dlopen(holder, file);
+      const native = holder.exports;
+      if (native === null || typeof native !== 'object' || typeof native.callHost !== 'function') {
+        logWarn(`dlopen(${file}) 成功但没有 callHost 导出（导出键：${Object.keys(native || {}).join(',') || '(空)'}）`
+          + ' —— 多半是 HAP 里的 .so 是旧版（缺宿主桥符号）');
+        continue;
+      }
+      host.setTransport((name, argsJson) => native.callHost(name, argsJson));
+      log(`宿主桥传输已接线：callHost ← ${file}（方向 Node→ArkTS；ArkTS 侧 100 ms 轮询泵；`
+        + `上限 name=128B args=8KB result=64KB 超时=15s）`);
+      return true;
+    } catch (err) {
+      logWarn(`加载原生桥失败（${file}）：${describeError(err)}`);
+    }
+  }
+  logWarn('宿主桥传输**未**接线：所有 host.invoke() 都会 reject transport-unavailable'
+    + '（宿主能力不可达；这不是静默失败，原因见上两行）');
+  return false;
+}
+
+/**
+ * E18 验收探针：一次真实往返（`runtime.facts`）。
+ * 结果只进 `app.log`（可 grep `宿主桥往返`），成功/失败都留痕。
+ */
+function probeHostBridge(host) {
+  host.invoke('runtime.facts', {}).then((facts) => {
+    let brief = '';
+    try {
+      brief = JSON.stringify(facts).slice(0, 240);
+    } catch (err) {
+      brief = '<不可序列化>';
+    }
+    log(`宿主桥往返成功（runtime.facts）：${brief}`);
+  }).catch((err) => {
+    logWarn(`宿主桥往返失败（runtime.facts）：${describeError(err)}`);
+  });
 }
 
 async function closeServer(reason) {
