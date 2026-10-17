@@ -286,6 +286,11 @@ struct Index {
           .fontColor(Color.Red)
           .width('100%')
       }
+      // P2：平台能力缺失必须**显式**展示为「能力标志」，而不是等 API 抛模块加载异常
+      Text(PiDesktopRuntime.getInstance().getCapabilityNotice())
+        .fontSize(12)
+        .fontColor(Color.Orange)
+        .width('100%')
     }
     .width('100%')
     .padding({ left: 12, right: 12, bottom: 8 })

@@ -90,6 +90,25 @@ export const USER_HOME_DIR: string = '/storage/Users/currentUser';
 /** 默认工作目录名（与 agent 目录区分；旧壳 `pi-cwd` 同口径） */
 export const CWD_DIR_NAME: string = 'pi-cwd';
 
+// ── 平台能力事实（P2：**能力标志**，不是错误路径）──────────────────────────────
+/**
+ * 终端 / PTY：**明确不支持**。真机证据（2026-10-17 本机实测，命令与输出见
+ * `logs/20261016-1/DEV_CHECKLIST.md`）：
+ *   - `wc -l < /proc/mounts` = 325，`grep -c devpts /proc/mounts` = **0**；`/dev` 是 `devfs`；
+ *   - shell 域 `stat /dev/ptmx` → `Permission denied`（EACCES）；
+ *   ⇒ 即使拿到 node-pty 的 `.so`，也没有 `/dev/pts/N` 可开。
+ * 结论与 `docs/000-工程规划.md` §4.4（平台无 PTY）、`鸿蒙环境能力清单` #16 一致。
+ * **绝不伪造 PTY**：能力报告如实给 false + 理由，UI/API 按「不支持」降级展示。
+ */
+export const CAP_TERMINAL_SUPPORTED: boolean = false;
+export const CAP_TERMINAL_REASON: string =
+  '本平台没有 PTY 设备节点：/proc/mounts 的 325 条里没有 devpts，/dev 是 devfs，'
+    + 'shell 域 stat /dev/ptmx 直接 EACCES ⇒ 即便拿到 node-pty 原生库也没有 /dev/pts/N 可开'
+    + '（HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / API 26 / OpenHarmony-7.0.0.105 实测）';
+export const CAP_TERMINAL_EVIDENCE: string =
+  'grep -c devpts /proc/mounts = 0；grep " /dev " /proc/mounts = devfs /dev devfs rw,relatime；'
+    + 'stat /dev/ptmx → Permission denied';
+
 // ── 时序（每一段都可在诊断面板上看到，因此失败可见）────────────────────────────
 /** 探活参数：退避重试（先例实测：一次探活就下结论会误判首启慢） */
 export const PROBE_ATTEMPTS: number = 20;

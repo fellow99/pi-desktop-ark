@@ -1,6 +1,6 @@
 import { abilityAccessCtrl, bundleManager, common, Permissions, Want } from '@kit.AbilityKit';
 import { NodeLogEntry, NodeRuntime } from '@fellow99/node-bridge';
-import { Log, escapeJson } from '../common/Constants';
+import { CAP_TERMINAL_EVIDENCE, CAP_TERMINAL_REASON, CAP_TERMINAL_SUPPORTED, Log, escapeJson } from '../common/Constants';
 
 /**
  * HostCapabilities —— **宿主能力桥的 ArkTS 侧实现**（工程规划 §5 第 8/9/10 条）。
@@ -93,6 +93,25 @@ export class HostCapabilities {
     return summary;
   }
 
+  /**
+   * 平台能力事实的**唯一序列化点**（P2）。UI / 诊断串 / `runtime.facts` 都读这里。
+   *
+   * 为什么必须这么写：`/api/terminal` 现在的失败是
+   * 「Cannot load the node-pty native terminal module for openharmony-arm64」——
+   * 那被记成**加载错误**，而事实是**平台没有 PTY**（无 devpts、无 /dev/pts/N）。
+   * 能力缺失必须以能力标志出现，而不是以异常出现；本方法就是那份标志。
+   * **不伪造支持**：`supported:false` 是硬编码事实，不给任何「也许能用」的余地。
+   */
+  static capabilitiesJson(): string {
+    return '{"terminal":{'
+      + '"capability":"terminal.pty",'
+      + '"supported":' + (CAP_TERMINAL_SUPPORTED ? 'true' : 'false') + ','
+      + '"reason":"' + escapeJson(CAP_TERMINAL_REASON) + '",'
+      + '"evidence":"' + escapeJson(CAP_TERMINAL_EVIDENCE) + '",'
+      + '"plan":"§4.4 平台无 PTY；不实现伪终端，终端面板按 unsupported 降级"'
+      + '}}';
+  }
+
   /** `runtime.facts`：本进程的运行事实（诊断面板与 Node 侧都能读） */
   private static runtimeFacts(runtime: NodeRuntime, argsJson: string): string {
     let logs: number = -1;
@@ -114,7 +133,8 @@ export class HostCapabilities {
       + '"lastError":"' + escapeJson(runtime.getLastError()) + '",'
       + '"logEntries":' + logs + ','
       + '"hostBridge":' + escapeJson(runtime.host.stats()) + ','
-      + '"args":"' + escapeJson(argsJson) + '"'
+      + '"args":"' + escapeJson(argsJson) + '",'
+      + '"capabilities":' + HostCapabilities.capabilitiesJson()
       + '}';
     return json;
   }

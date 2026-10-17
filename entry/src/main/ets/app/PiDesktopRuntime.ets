@@ -21,15 +21,17 @@ import {
   ENV_SKIP_VERSION_CHECK,
   ENV_WEB_HOSTNAME,
   ENV_WEB_PORT,
+  CAP_TERMINAL_REASON,
   Log,
   PAYLOAD_DIR,
   PAYLOAD_ENTRY,
   PI_WEB_ENTRY_FILE,
   PROBE_ATTEMPTS,
   PROBE_INTERVAL_MS,
-  READONLY_PAYLOAD_DIR,
   READY_MARKER_INTERVAL_MS,
   READY_MARKER_TIMEOUT_MS,
+  READONLY_PAYLOAD_DIR,
+  SANDBOX_DIR_NAME,
   USER_HOME_DIR,
   WAIT_RUNNING_TIMEOUT_MS,
   appUrl,
@@ -83,6 +85,24 @@ export class PayloadPlan {
 }
 
 /**
+ * 一个「声明的」工作区根（与 `PI_HOS_ROOTS` 的元素同构）。
+ * ArkTS 不接受匿名结构体，故显式建模；`permType` 为空串 = JSON 里的 `null`（沙箱根不需要 ACL 权限）。
+ */
+export class DeclaredRoot {
+  id: string;
+  label: string;
+  path: string;
+  permType: string;
+
+  constructor(id: string, label: string, path: string, permType: string) {
+    this.id = id;
+    this.label = label;
+    this.path = path;
+    this.permType = permType;
+  }
+}
+
+/**
  * PiDesktopRuntime —— 消费方编排（本工程自己的逻辑，不属于库）。
  *
  * 启动编排（工程规划 §4 启动时序 / §5.10 ⑪⑭）：
@@ -113,6 +133,11 @@ export class PiDesktopRuntime {
    * 端口回退解析绝不能读到上一轮的 `PI_WEB_READY`（真机实测缺陷，见 resolveActualPort 的注释）。
    */
   private launchStartedAt: number = 0;
+  /**
+   * 声明过的工作区根的建立结果（P1a；`<id>=ok|skip|FAIL(...)` 用 `｜` 连接）。
+   * 进诊断串 —— 建不出来是**必须可见**的事实，不允许只躺在日志里（C2）。
+   */
+  private workspaceRootsNote: string = '(尚未执行)';
 
   static getInstance(): PiDesktopRuntime {
     if (PiDesktopRuntime.instance === undefined) {
@@ -202,6 +227,8 @@ export class PiDesktopRuntime {
 
     // 把库的沙箱目录先建好（payload/ + tmp/ + node-bridge/），再投递（库内部也会做一次，幂等）
     this.setStage('准备沙箱目录');
+    // P2：能力事实在启动时就进 hilog —— 「终端/PTY 不支持」必须可被 grep 到，而不是只在点开终端时才炸
+    Log.info('能力：' + this.getCapabilityNotice());
     try {
       const payloadDir: string = context.filesDir + '/' + PAYLOAD_DIR;
       const tmpDir: string = context.filesDir + '/tmp';
@@ -211,6 +238,8 @@ export class PiDesktopRuntime {
       this.ensureDir(bridgeDir);
       this.ensureDir(context.filesDir + '/' + AGENT_DIR_NAME);
       this.ensureDir(context.filesDir + '/' + CWD_DIR_NAME);
+      // P1a：声明过的沙箱内工作区根（`<base>/workspace` 等）必须在这里建 —— browse API 拒绝代建
+      this.ensureDeclaredRoots(context);
     } catch (e) {
       // 建目录失败不致命（库与 Node 侧会各自再报），但必须可见
       Log.warn('目录准备阶段出现异常（继续启动，后续由 Node 侧报错）：' + Ports.describe(e));
@@ -519,16 +548,74 @@ export class PiDesktopRuntime {
     return env;
   }
 
+  /**
+   * 一个「声明的」工作区根（与 `PI_HOS_ROOTS` 的元素同构，顺序即 UI 顺序）。
+   * 单一事实源：`declaredRoots()` 出清单，`buildWorkspaceRoots()` 只负责序列化，
+   * `ensureDeclaredRoots()` 只负责把**沙箱内**的根建出来 —— 三者不许各写一份路径。
+   */
+  private declaredRoots(context: common.UIAbilityContext): DeclaredRoot[] {
+    const roots: DeclaredRoot[] = [];
+    roots.push(new DeclaredRoot('sandbox', '沙箱', context.filesDir + '/' + SANDBOX_DIR_NAME, ''));
+    roots.push(new DeclaredRoot('desktop', '桌面', USER_HOME_DIR + '/Desktop', 'directory_desktop'));
+    roots.push(new DeclaredRoot('documents', '文档', USER_HOME_DIR + '/Documents', 'directory_document'));
+    roots.push(new DeclaredRoot('download', '下载', USER_HOME_DIR + '/Download', 'directory_download'));
+    return roots;
+  }
+
   /** 工作区主目录清单（与 `payload/env.js` 的兜底清单同形；选择器结果就绪后由它接管） */
   private buildWorkspaceRoots(context: common.UIAbilityContext): string {
-    const sandbox: string = context.filesDir + '/' + 'workspace';
-    const json: string = '['
-      + '{"id":"sandbox","label":"沙箱","path":"' + escapeJson(sandbox) + '","permType":null},'
-      + '{"id":"desktop","label":"桌面","path":"' + USER_HOME_DIR + '/Desktop","permType":"directory_desktop"},'
-      + '{"id":"documents","label":"文档","path":"' + USER_HOME_DIR + '/Documents","permType":"directory_document"},'
-      + '{"id":"download","label":"下载","path":"' + USER_HOME_DIR + '/Download","permType":"directory_download"}'
-      + ']';
-    return json;
+    const roots: DeclaredRoot[] = this.declaredRoots(context);
+    let json: string = '[';
+    for (let i = 0; i < roots.length; i++) {
+      const r: DeclaredRoot = roots[i];
+      if (i > 0) {
+        json += ',';
+      }
+      json += '{"id":"' + r.id + '","label":"' + r.label + '","path":"' + escapeJson(r.path) + '","permType":'
+        + (r.permType.length === 0 ? 'null' : '"' + r.permType + '"') + '}';
+    }
+    return json + ']';
+  }
+
+  /**
+   * P1a：把**声明过的、落在沙箱内**的工作区根**幂等地**建出来（必须在投递 Node 之前）。
+   *
+   * 为什么只能在这里建：
+   *   - `GET /api/cwd/browse?root=sandbox` 在 `<base>/workspace` 不存在时直接回
+   *     `{"error":"Directory does not exist","code":"ENOENT","rootId":"sandbox"}`；
+   *   - browse API 自己**拒绝**创建它（`Parent path is outside the declared workspace roots`），
+   *     于是这个「已声明的根」在真机上永远建不出来，用户在选择器里看到的是一个死入口；
+   *   - 宿主应用（进程所有者）是唯一能建它的一层。
+   *
+   * 失败**不吞**（C2）：逐条 `Log.error` + 汇总进 `workspaceRootsNote`（诊断串里可见）。
+   * 沙箱外的根（桌面/文档/下载）**不建也不失败**：它们由 ACL + 权限弹窗决定，应用无权替用户创建。
+   */
+  private ensureDeclaredRoots(context: common.UIAbilityContext): void {
+    const roots: DeclaredRoot[] = this.declaredRoots(context);
+    const sandboxPrefix: string = context.filesDir + '/';
+    const notes: string[] = [];
+    let failed: number = 0;
+    for (let i = 0; i < roots.length; i++) {
+      const r: DeclaredRoot = roots[i];
+      if (!r.path.startsWith(sandboxPrefix)) {
+        notes.push(r.id + '=skip(沙箱外，由 ACL 决定)');
+        continue;
+      }
+      const err: string = this.ensureDirStrict(r.path);
+      if (err.length === 0) {
+        notes.push(r.id + '=ok');
+      } else {
+        failed += 1;
+        notes.push(r.id + '=FAIL(' + err + ')');
+        Log.error('声明的工作区根建不出来：' + r.path + '｜' + err);
+      }
+    }
+    this.workspaceRootsNote = notes.join('｜');
+    if (failed === 0) {
+      Log.info('声明的工作区根：' + this.workspaceRootsNote);
+    } else {
+      Log.error('声明的工作区根有 ' + failed + ' 条失败：' + this.workspaceRootsNote);
+    }
   }
 
   /**
@@ -574,10 +661,22 @@ export class PiDesktopRuntime {
       + '"portEvidence":"' + escapeJson(this.portEvidence) + '",'
       + '"url":"' + escapeJson(this.getUrlOrPending()) + '",'
       + '"hostCapabilities":"' + escapeJson(this.hostSummary) + '",'
+      + '"workspaceRoots":"' + escapeJson(this.workspaceRootsNote) + '",'
+      + '"capabilities":' + HostCapabilities.capabilitiesJson() + ','
       + '"node":{"state":"' + state + '","stage":"' + stage + '","bridgeVersion":"' + bridgeVersion + '"'
       + ',"pid":' + pid + ',"isRunning":' + (isRunning ? 'true' : 'false') + ',"lastError":"' + lastError + '"'
       + ',"logPath":"' + logPath + '","logs":' + logsJson + ',"lastCrash":' + crashJson + '}'
       + '}';
+  }
+
+  /**
+   * P2：给 UI 的能力提示串（**能力标志**的展示层）。
+   * 终端/PTY 在本平台**不支持**：这类事实必须以「不支持 + 理由」出现在界面上，
+   * 而不是等用户点开终端、再看到一个 `Cannot load the node-pty native terminal module` 的
+   * 模块加载异常（那是把平台能力缺失伪装成安装错误）。
+   */
+  getCapabilityNotice(): string {
+    return '终端 / PTY：不支持 —— ' + CAP_TERMINAL_REASON;
   }
 
   /** 库日志尾（`Logger.tail`，UTF-8 正确解码；读失败返回占位串并记日志，不抛） */
@@ -764,6 +863,26 @@ export class PiDesktopRuntime {
       }
     } catch (e) {
       Log.warn('建目录失败（可能已存在）：' + path + '｜' + Ports.describe(e));
+    }
+  }
+
+  /**
+   * 幂等建目录的**严格**版本：成功返回空串，失败返回可读错误（不吞）。
+   * 与上面的 `ensureDir()` 的区别：那个只 warn（启动流程不允许被单个目录挡住），
+   * 这个把结果交回调用方 —— 声明根的建立结果要能上诊断面板（C2）。
+   */
+  private ensureDirStrict(path: string): string {
+    try {
+      if (this.fileExists(path)) {
+        return '';
+      }
+      fs.mkdirSync(path);
+      if (!this.fileExists(path)) {
+        return 'mkdirSync 返回后目录仍不存在';
+      }
+      return '';
+    } catch (e) {
+      return Ports.describe(e);
     }
   }
 
