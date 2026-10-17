@@ -606,13 +606,17 @@ const DEFAULT_PATCH_DIR = path.join(PROJECT_ROOT, 'patches', PI_WEB_PATCH_TAG);
  * 标记都取自**路由 bundle 里必然出现的字面量**（Next 会把 `@/lib/*` 内联进
  * `route.js`，终端补丁的 `terminal.pty` 就是这样被断言到的）：
  *   · `PI_HOS_ROOTS`         —— `lib/directory-browser.ts` 读宿主声明的工作区根；
- *   · `pi-hos-sandbox-alias` —— `lib/hos-sandbox-path.ts` 的编译期标记（写在 hint 里）。
+ *   · `pi-hos-sandbox-alias` —— `lib/hos-sandbox-path.ts` 的编译期标记（写在 hint 里）；
+ *   · `pi-hos-picker-contract` —— 选择器契约（E14）的编译期标记：`app/api/cwd/browse/route.ts`
+ *     的每个响应都带 `contract` 字段，字面量来自 `lib/directory-browser.ts`
+ *     `PICKER_CONTRACT_MARKER`（前端组件里的字面量**不会**进这个 server bundle）。
  */
 const PI_WEB_PATCH_MARKERS = [
   { rel: '.next/server/app/api/terminal/route.js', marker: 'terminal.pty' },
   { rel: '.next/server/app/api/cwd/browse/route.js', marker: 'PI_HOS_ROOTS' },
   { rel: '.next/server/app/api/cwd/validate/route.js', marker: 'pi-hos-sandbox-alias' },
-  { rel: '.next/server/app/api/sessions/[id]/export/route.js', marker: 'pi-hos-export-runtime-guard' }
+  { rel: '.next/server/app/api/sessions/[id]/export/route.js', marker: 'pi-hos-export-runtime-guard' },
+  { rel: '.next/server/app/api/cwd/browse/route.js', marker: 'pi-hos-picker-contract' }
 ];
 
 /** 补丁阶段的失败（main 捕获后 exit 2：这是「输入不满足」，不是脚本 bug） */

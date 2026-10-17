@@ -31,6 +31,7 @@ import {
   READY_MARKER_INTERVAL_MS,
   READY_MARKER_TIMEOUT_MS,
   READONLY_PAYLOAD_DIR,
+  HOST_PROBE_CAPABILITIES,
   HOST_MAILBOX_DIR_NAME,
   ENV_HOST_MAILBOX,
   SandboxRootCheck,
@@ -339,6 +340,16 @@ export class PiDesktopRuntime {
       return 'FAILED: ' + this.lastError;
     }
     Log.info('start 已投递：state=' + result.state + ' code=' + result.code);
+
+    /*
+     * 宿主能力自检（默认空 ⇒ 什么都不做，见 `Constants.HOST_PROBE_CAPABILITIES`）。
+     *
+     * 为什么放在这里：它只依赖 ArkTS 侧的处理器注册（`HostCapabilities.install` 已在
+     * 投递之前完成），不需要 Node 起来。**不 await**：其中会有弹窗/跳转（E17/E19），
+     * 让它们自己跑，不阻塞启动流程。
+     */
+    this.probeLogPath = context.filesDir + '/capability-probe.log';
+    this.runCapabilityProbes(runtime);
 
     // ④ 等 Node 线程真正跑起来（库的通用轮询；**超时会 reject**，且库会自己 markFailed）
     this.setStage('等待 Node 运行（waitUntilRunning，上限 ' + WAIT_RUNNING_TIMEOUT_MS + ' ms）');
@@ -905,6 +916,52 @@ export class PiDesktopRuntime {
     } catch (e) {
       Log.warn('读文件失败（按不可读处理）：' + path + '｜' + Ports.describe(e));
       return '';
+    }
+  }
+  private async runCapabilityProbes(runtime: NodeRuntime): Promise<void> {
+    const list: string[] = HOST_PROBE_CAPABILITIES;
+    if (list.length === 0) {
+      return;
+    }
+    // 结果**必须落文件**：本机 hilog 的 INFO 行取不到（`docs/002` §8），
+    // 而这几类能力恰恰只能靠"弹窗被点了/设置被打开了"来判读 —— 落文件是唯一可复核的通道。
+    const logPath: string = this.probeLogPath;
+    this.appendProbeLog(logPath, '=== 自检开始：' + list.length + ' 项 ===');
+    for (const item of list) {
+      const sep: number = item.indexOf('|');
+      const name: string = sep < 0 ? item : item.substring(0, sep);
+      const args: string = sep < 0 ? '{}' : item.substring(sep + 1);
+      try {
+        const out: string = await runtime.host.dispatchAsync(name, args);
+        this.appendProbeLog(logPath, name + ' -> ' + out);
+        Log.info('宿主能力自检 ' + name + ' -> ' + out);
+      } catch (e) {
+        const detail: string = Ports.describe(e);
+        this.appendProbeLog(logPath, name + ' !! ' + detail);
+        Log.warn('宿主能力自检 ' + name + ' 抛异常：' + detail);
+      }
+    }
+    this.appendProbeLog(logPath, '=== 自检结束 ===');
+  }
+
+  /** 自检日志路径（`<filesDir>/capability-probe.log`；0666 由 fileIo 默认给出，`hdc` 可读） */
+  private probeLogPath: string = '';
+
+  /** 追加一行自检日志（**永不抛**：自检本身不该把启动带崩） */
+  private appendProbeLog(path: string, line: string): void {
+    if (path.length === 0) {
+      return;
+    }
+    try {
+      const f: fs.File = fs.openSync(path,
+        fs.OpenMode.WRITE_ONLY | fs.OpenMode.CREATE | fs.OpenMode.APPEND);
+      try {
+        fs.writeSync(f.fd, new Date().toISOString() + ' ' + line + '\n');
+      } finally {
+        fs.closeSync(f);
+      }
+    } catch (e) {
+      Log.warn('写自检日志失败：' + Ports.describe(e));
     }
   }
 

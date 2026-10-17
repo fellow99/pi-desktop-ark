@@ -183,11 +183,11 @@ dshm 的连锁（不申请 JIT ⇒ `--jitless` ⇒ `WebAssembly === undefined`�
 
 | 我们的项 | 内容 | 依据 | 状态 |
 |---|---|---|---|
-| **E14** | 选择器交互契约（Tab / 面包屑根围栏 / `truncated` / 新建文件夹默认名与去重 / 主目录记忆） | §H.4 的 8 条 · D8 | ⬜ |
-| **E17** | 对话框内主动弹授权窗（`abilityAccessCtrl.requestPermissionsFromUser` + active context） | §H.4 `FR-203-017` | ⬜ |
-| **E19** | 权限归因 + 「去系统设置」（`openApplicationInfoEntry` + 归因话术） | `FR-203-015/016` · D7 | ⬜ |
-| **E20** | 通知 `notify.show`（`notificationManager`） | D6 | ⬜ |
-| **E21** | 系统文件选择器 `fs.pickFolder`（`@ohos.file.picker`） | D5 | ⬜ |
+| **E14** | 选择器交互契约（Tab / 面包屑根围栏 / `truncated` / 新建文件夹默认名与去重 / 主目录记忆） | §H.4 的 8 条 · D8 | ✅ 补丁 0005（服务端读数真机验证） |
+| **E17** | 对话框内主动弹授权窗（`abilityAccessCtrl.requestPermissionsFromUser` + active context） | §H.4 `FR-203-017` | ✅ 真机弹窗 + `authResult:0` |
+| **E19** | 权限归因 + 「去系统设置」（SDK 无该 API ⇒ want `action=ohos.settings.application.details` + 归因话术） | `FR-203-015/016` · D7 | ✅ 真机跳设置页 |
+| **E20** | 通知 `notify.show`（`notificationManager`） | D6 | ⚠️ 已实现；本机被系统拒绝 `1600004 Notification disabled` |
+| **E21** | 系统文件选择器 `fs.pickFolder` / `fs.pickFiles`（`@ohos.file.picker`） | D5 | ✅ 选择器打开 + 取消路径真机通过 |
 
 **实现纪律（来自 dshm 的三条）**：
 1. **能力实现属消费方**（库只做寄存器 + 传输）—— 我们的 `HostCapabilities.install()` 正是这一层；

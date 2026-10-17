@@ -94,6 +94,23 @@ export const ENV_HOST_MAILBOX: string = 'PI_HOST_MAILBOX';
  * 为什么放在 `filesDir` 而不是 `cacheDir`：`hdc shell` 对 `files` 可读、对 `cacheDir` 不可读
  * （真机实测），而"每个中间态都能被 cat 出来"正是这条传输唯一的诊断优势。
  */
+
+/**
+ * 宿主能力的**自检触发清单**（`<能力名>|<argsJson>`，逐条 `dispatchAsync` 后写日志）。
+ *
+ * 为什么需要它：宿主能力里有一半是「用户显式动作」（弹授权窗 / 选目录 / 发通知），
+ * 而从外部**无法**触发 —— `hdc` 对 el2 沙箱是只读的（实测 `Permission denied`），
+ * Node 侧也只能经信箱调用。没有一个应用内入口，就只能"改一行代码重建一次"来验证。
+ *
+ * 纪律：
+ *   · **默认空数组** —— 出厂构建不做任何自检，不弹窗、不发通知；
+ *   · 验证某项能力时临时填入，改的是本文件 ⇒ **只需重建 HAP**（~30 s），不必重打载荷；
+ *   · 每项串里用 `<name>|<argsJson>`，两段都缺一不可（args 缺省写成 `{}`）；
+ *   · 结果一律进 `<filesDir>/capability-probe.log`（`宿主能力自检 <name> -> …`），失败也留痕。
+ *
+ * **出厂默认是空数组** —— 不做任何自检、不弹窗、不发通知、不打开选择器。
+ */
+export const HOST_PROBE_CAPABILITIES: string[] = [];
 export const HOST_MAILBOX_DIR_NAME: string = 'host-mailbox';
 
 /** pi 数据与扩展根（相对 HOME） */
