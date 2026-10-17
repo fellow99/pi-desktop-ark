@@ -17,40 +17,55 @@ export const PAYLOAD_DIR: string = 'payload';
 
 /**
  * 骨架期载荷入口（Phase 0 回归路径）：**rawfile 名 = 落盘后的文件名**。
- * 产品路径（pi-web）的入口见 `PI_WEB_ENTRY_FILE`（在 `resfile/pi-web/` 里，只读直读）。
+ * 产品路径（pi-web）的入口见 `PI_WEB_ENTRY_FILE`（在 `resfile/pi-web/pi-web.tar.gz` 里，
+ * 由库 bootstrap 解包后按 `entry` 解析）。
  */
 export const PAYLOAD_ENTRY: string = 'selfcheck.js';
 
 // ── 产品载荷（工程规划 §7.1 两条路线）─────────────────────────────────────────
-/** 只读直读路线 ①：`resources/resfile/` 下的载荷目录名（`readonlyRoot` 之内的一层） */
+/**
+ * 只读直读路线 ①：`resources/resfile/` 下的载荷目录名（`readonlyRoot` 之内的一层）。
+ *
+ * ⚠️ 本应用**只发归档形态**（路线 ②）：把解开的 2.7 万文件树塞进 resfile 会拖死 hvigor
+ * （`pi-desktop-hos/scripts/collect-pi.mjs:7` 的实测结论）。路线 ① 的判定分支保留，
+ * 仅用于「有人真的按目录投放」时能直读、不误导。
+ */
 export const READONLY_PAYLOAD_DIR: string = 'pi-web';
-/** Node 侧入口文件名（`payload/pi-web-launch.js`，由库的 bootstrap require） */
+/** Node 侧入口文件名（`payload/pi-web-launch.js`，由库的 bootstrap 按运行根 require） */
 export const PI_WEB_ENTRY_FILE: string = 'pi-web-launch.js';
-/** 路线 ② 的归档 rawfile 名（由 `scripts/assemble-payload.mjs --route tar` 产出） */
-export const ARCHIVE_RAWFILE: string = 'pi-web.tar.gz';
-/** 归档 SHA-256 旁文件（首行 64 位 hex = 幂等键，交给 `options.archiveSha256`） */
-export const ARCHIVE_SHA256_RAWFILE: string = 'pi-web.tar.gz.sha256';
-/** 归档在沙箱内的落点（Node 自己解包；ArkTS 只做**原始字节搬运**，不解析 tar） */
-export const ARCHIVE_STAGED_NAME: string = 'pi-web.tar.gz';
+/**
+ * 路线 ② 的归档路径，**相对 `context.resourceDir`**（即 HAP 里的 `resources/resfile/`）。
+ *
+ * 为什么必须是 resfile 而不是 rawfile：HAP 里 **只有 resfile 是真实磁盘目录**（安装时落盘），
+ * rawfile 只能经 `resourceManager` 读，Node 侧的 `fs` 永远打不开它 —— 实测后果是
+ * `PiDesktopRuntime` 用 fs 探 rawfile 归档必然失配、静默退回自检路线（`node.log` 里只剩
+ * `[selfcheck] listening …`，`payload/app.log` 缺席）。`pi-desktop-hos` 同形：
+ * 归档落在 `resfile/resources/app/pi-dist.tar.gz`，主进程直接 `fs` 读（`src-main/main.js:40-45`）。
+ */
+export const ARCHIVE_REL: string = 'pi-web/pi-web.tar.gz';
+/**
+ * 归档的 SHA-256 版本文件（相对 `context.resourceDir`），内容 = 归档的 sha256 hex（首行 64 位）。
+ *
+ * 形状镜像 `pi-desktop-hos/pi-dist.version`：它是**幂等键的唯一事实源** —— 交给
+ * `options.archiveSha256`，库据此判定「解包过就跳过」（bootstrap 打印 `payload ready (skip)`）。
+ */
+export const ARCHIVE_VERSION_REL: string = 'pi-web/pi-web.version';
 
 // ── 库自带 Node 侧载荷（F4：HAR 不含 payload/，必须由本应用投放）──────────────────
 /**
  * 库引导器（`../ohos-node-bridge/payload/bootstrap.js`）。它是交给库 `scriptPath` 的
  * **实际执行脚本**：解归档 / 幂等 marker / `uncaughtException` 兜底 / 独立日志通道都在它里面。
- * 投放位置：路线 ① = `resfile/<READONLY_PAYLOAD_DIR>/`；路线 ② = `rawfile/`（应用物化到 payloadRoot）。
+ * 投放位置：`resfile/<READONLY_PAYLOAD_DIR>/`（与归档同层，`fs` 可读 —— `scriptPath` 必须是
+ * 真实文件路径）。
  */
 export const BRIDGE_BOOTSTRAP_FILE: string = 'bootstrap.js';
 /** bootstrap 的同级依赖（Node 侧宿主桥客户端；`registerShutdownHook` 也找它） */
 export const BRIDGE_HOST_FILE: string = 'host.js';
-/** bootstrap 的相对依赖 `./lib/tar-extract.js`（路线 ② 解归档用；rawfile 里保留 lib 层级） */
-export const BRIDGE_TAR_EXTRACT_RAWFILE: string = 'lib/tar-extract.js';
-/** 路线 ② 必须物化的库载荷清单（顺序即物化顺序；第一个是 `scriptPath`） */
-export const BRIDGE_RAWFILES: string[] = ['bootstrap.js', 'host.js', 'lib/tar-extract.js'];
 /** Node 侧就绪 marker（载荷写、ArkTS 读；内容是真实端口/URL/耗时） */
 export const READY_MARKER_NAME: string = 'pi-web.ready.json';
 /** 载荷自己的日志通道（⑱：与库的 node.log 分开） */
 export const APP_LOG_NAME: string = 'app.log';
-/** 应用内错误页（ArkWeb `$rawfile`） */
+/** 应用内错误页（ArkWeb `$rawfile`；这是 rawfile 唯一的运行时用途，与路线判定无关） */
 export const ERROR_PAGE: string = 'error.html';
 
 // ── 应用语义环境变量的名字（**唯一事实源是 `payload/env.js`**）────────────────
@@ -103,19 +118,6 @@ export function readyMarkerPath(filesDir: string): string {
 /** 载荷自己的日志路径（app.log；诊断面板与「请重启应用」提示都指向它） */
 export function appLogPath(filesDir: string): string {
   return `${filesDir}/${PAYLOAD_DIR}/${APP_LOG_NAME}`;
-}
-
-/**
- * `context.resourceDir` 指向安装包的 `resources/resfile`；`rawfile` 是它的**同级目录**。
- * 为什么需要它：路线 ② 的归档是 rawfile，ArkTS 侧要先判断「包内到底有没有归档」，
- * 再决定要不要走解包路线（不猜、不硬编码成功路径）。
- */
-export function rawfileDirFromResourceDir(resourceDir: string): string {
-  const suffix = '/resfile';
-  if (resourceDir.endsWith(suffix)) {
-    return resourceDir.substring(0, resourceDir.length - suffix.length) + '/rawfile';
-  }
-  return `${resourceDir}/../rawfile`;
 }
 
 /** JSON 字符串转义（手写：诊断/能力桥的 JSON 全部由字符串拼装，绝不让引号破坏结构） */

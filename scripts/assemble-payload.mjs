@@ -7,12 +7,19 @@
  * 不动任何文件、更不动源目录。
  *
  * 两条投放路线（§7.1 二选一）：
- *   ① `--route readonly`（默认）：载荷**原样**放进 `entry/src/main/resources/resfile/pi-web/`，
- *      Node 从只读安装目录直读 ⇒ 零解压、零首启等待。库侧对应
- *      `NodeRuntimeOptions.readonlyRoot = context.resourceDir` + `entry = 'pi-web/<入口>'`。
- *   ② `--route tar`：先把裁剪后的树复制到暂存目录，再由本脚本打成单个 `tar.gz`
- *      放进 `entry/src/main/resources/rawfile/`，并打印 SHA-256（前 12 位是幂等键，
- *      经 `NodeRuntimeOptions.archiveSha256` 交给库，见契约 §3.2）。
+ *   ② `--route tar`（**默认，也是本应用实际使用的产品路线**）：把裁剪后的树复制到暂存目录，
+ *      打成单个 `tar.gz`（`--format=ustar` 同级的确定性 ustar 写入器，见下），投放到
+ *      `entry/src/main/resources/resfile/pi-web/pi-web.tar.gz`，并写同目录的
+ *      `pi-web.version`（首行 = 归档的 sha256，形状镜像 pi-desktop-hos/pi-dist.version）。
+ *      运行期：`PiDesktopRuntime` 用 **fs 实检 resfile** 判路线，把归档路径 + sha256 交给库，
+ *      由 `bootstrap.js` 解包到 `<filesDir>/payload/<sha256[:12]>/`（幂等：marker 命中即跳过）。
+ *   ① `--route readonly`（**诊断/演进用，当前不发**）：载荷**原样**放进 `resfile/pi-web/`，
+ *      Node 从只读安装目录直读 ⇒ 零解压。⚠️ 它会把 2.7 万文件塞进 resfile，hvigor 打包会
+ *      明显变慢甚至中止（`pi-desktop-hos/scripts/collect-pi.mjs:7` 的实测结论），因此不是默认。
+ *
+ * 为什么归档必须落 **resfile** 而不是 rawfile：HAP 里只有 resfile 是安装后落盘的**真实目录**，
+ * rawfile 只能经 `resourceManager` 读 —— Node 侧的 `fs` 打不开它（`scriptPath` / 归档都必须是
+ * 真实文件路径）。pi-desktop-hos 同形：`resfile/resources/app/pi-dist.tar.gz`（collect-app.mjs:5-14）。
  *
  * 纪律：
  *   · **源目录只读**：裁剪发生在**复制过程中**（fs.cp 的 filter），不是「先拷完再删」——
@@ -22,14 +29,14 @@
  *   · 每个被跳过/保留的项都打印出来，供评审逐条核对（裁剪是删东西，不能只报总计）。
  *
  * 用法：
- *   node scripts/assemble-payload.mjs                       # dry run，路线 ①，报告裁剪明细
- *   node scripts/assemble-payload.mjs --apply               # 真正投放到 resfile/pi-web/
- *   node scripts/assemble-payload.mjs --route tar --apply   # 产出 rawfile/pi-web.tar.gz + SHA-256
+ *   node scripts/assemble-payload.mjs                       # dry run，路线 ②，报告裁剪明细
+ *   node scripts/assemble-payload.mjs --apply               # 产出 resfile/pi-web/{pi-web.tar.gz,pi-web.version}
+ *   node scripts/assemble-payload.mjs --route readonly --apply   # 诊断用：整树投放（慢，勿入库）
  *   node scripts/assemble-payload.mjs --from <pi-dist> --out <dir> --json report.json --force
  */
 
 import { createHash } from 'node:crypto';
-import { createGzip } from 'node:zlib';
+import { createGunzip, createGzip } from 'node:zlib';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -40,6 +47,7 @@ import {
   CROP_RULES,
   assertKeepSound,
   firstMatchingRule,
+  isExpectedOverlap,
   patternHits,
   ruleMatchesDir,
   ruleMatchesFile
@@ -49,25 +57,47 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** 项目根 = scripts/ 的上一级 */
 const PROJECT_ROOT = path.resolve(HERE, '..');
 const DEFAULT_FROM = path.resolve(PROJECT_ROOT, '..', 'pi-desktop-hos', 'pi-dist');
-const DEFAULT_OUT_READONLY = path.join(PROJECT_ROOT, 'entry', 'src', 'main', 'resources', 'resfile', 'pi-web');
+/** 载荷投放目录 = HAP 的 `resources/resfile/pi-web/`（**安装后落盘的真实目录**，Node 的 fs 可读） */
+const RESFILE_PAYLOAD_DIR = path.join(PROJECT_ROOT, 'entry', 'src', 'main', 'resources', 'resfile', 'pi-web');
+/** 路线 ①（诊断用）：整棵树原样投放；路线 ② 完全不碰这个形态 */
+const DEFAULT_OUT_READONLY = RESFILE_PAYLOAD_DIR;
 /** 路线 ② 的暂存目录（默认在项目的 build/ 下，已被 .gitignore 的 `/**\/build/` 覆盖） */
 const DEFAULT_STAGE = path.join(PROJECT_ROOT, 'build', 'payload-stage');
-const DEFAULT_TAR = path.join(PROJECT_ROOT, 'entry', 'src', 'main', 'resources', 'rawfile', 'pi-web.tar.gz');
+/** 归档产物（resfile 内；与 `PiDesktopRuntime` 的 `ARCHIVE_REL = 'pi-web/pi-web.tar.gz'` 一一对应） */
+const DEFAULT_TAR = path.join(RESFILE_PAYLOAD_DIR, 'pi-web.tar.gz');
+/** 归档的 sha256 版本文件（resfile 内；对应 `ARCHIVE_VERSION_REL = 'pi-web/pi-web.version'`） */
+const DEFAULT_VERSION = path.join(RESFILE_PAYLOAD_DIR, 'pi-web.version');
 
 /**
  * 库自带 Node 侧载荷目录（`../ohos-node-bridge/payload/`）。
  *
- * ⚠️ F4：`payload/` 三件**不在 HAR 里**（已知打包缺口：HAR 只带 ArkTS/原生代码）——
- * 应用必须自己投放：`assemblePayload` 把它们放进路线 ① 的 `--out`、路线 ② 的暂存树（⇒ 进归档），
- * 并投放到 rawfile；运行期 `bootstrap.js` 是交给 `node::Start` 的 `scriptPath`（契约 §3.1–§3.4）。
+ * ⚠️ F4：`payload/` 三件**不在 HAR 里**（已知打包缺口：HAR 只带 ArkTS/原生代码）—— 应用必须自己投放。
+ * 路线 ② 的投放点是 **`resfile/pi-web/`**：`bootstrap.js` 是交给库的 `scriptPath`（`node::Start`
+ * 实际执行的脚本），必须能被 Node 的 `fs` 直接打开 —— rawfile 做不到（那不是磁盘目录）。
+ * 归档内部也带一份（`pi-web/` 层），因为 `pi-web-launch.js` 只在 `__dirname` / payloadRoot 下找 `host.js`。
  */
 const DEFAULT_BRIDGE = path.resolve(PROJECT_ROOT, '..', 'ohos-node-bridge');
 /** 必须随包投放的三件（保留相对路径：bootstrap 以同级 `host.js` 与 `./lib/tar-extract.js` 为依赖） */
 const BRIDGE_PAYLOAD_FILES = ['bootstrap.js', 'host.js', 'lib/tar-extract.js'];
-/** rawfile 投放目录（应用用 `getRawFileContentSync` 物化引导器三件；默认随包进 HAP） */
-const DEFAULT_RAWFILE = path.join(PROJECT_ROOT, 'entry', 'src', 'main', 'resources', 'rawfile');
 /** 入口脚本名（与 payload/ 下的文件名一致；库侧 entry 会指向它） */
 const ENTRY_REL = 'pi-web-launch.js';
+/**
+ * 归档（路线 ②）内的根目录名。
+ *
+ * 为什么必须与路线 ① 的目录名一致：两条路线给库的 `entry` 都是 `pi-web/pi-web-launch.js`
+ * （`PiDesktopRuntime.buildPlan` 的实际取值），路线 ② 把它解到 `<payloadRoot>/<sha256[:12]>/`
+ * ⇒ 只有归档内自带 `pi-web/` 这一层，落点才会是 `<…>/pi-web/pi-web-launch.js`。
+ */
+const TAR_ROOT = 'pi-web';
+/**
+ * 应用自己的载荷覆盖层（本工程 `payload/`）：启动器 + 环境契约 + 预置扩展/配置。
+ *
+ * 为什么由本脚本投放：这三类文件**不在 pi-dist 里**（它们属于本工程），缺了启动器
+ * `entry` 直接缺失、缺了 `env.js` 启动器 `require('./env.js')` 立刻失败（实测缺陷）。
+ * `payload/README.md` 刻意不投放（文档不进载荷）。
+ */
+const APP_PAYLOAD_DIR = path.join(PROJECT_ROOT, 'payload');
+const APP_PAYLOAD_ENTRIES = ['pi-web-launch.js', 'env.js', 'extensions', 'config'];
 
 // ── 命令行解析 ────────────────────────────────────────────────────────────────
 
@@ -75,15 +105,13 @@ function parseArgs(argv) {
   const opts = {
     from: DEFAULT_FROM,
     out: '',
-    route: 'readonly',
+    route: 'tar',
     apply: false,
     force: false,
     keepStaging: false,
     json: '',
     quiet: false,
-    bridge: DEFAULT_BRIDGE,
-    rawfile: DEFAULT_RAWFILE,
-    skipRawfile: false
+    bridge: DEFAULT_BRIDGE
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -98,11 +126,9 @@ function parseArgs(argv) {
       case '--out': opts.out = next(); break;
       case '--route': opts.route = next(); break;
       case '--bridge': opts.bridge = path.resolve(next()); break;
-      case '--rawfile': opts.rawfile = path.resolve(next()); break;
       case '--apply': opts.apply = true; break;
       case '--force': opts.force = true; break;
       case '--keep-staging': opts.keepStaging = true; break;
-      case '--skip-rawfile': opts.skipRawfile = true; break;
       case '--json': opts.json = path.resolve(next()); break;
       case '--quiet': opts.quiet = true; break;
       case '--help':
@@ -121,14 +147,12 @@ function usage() {
     '用法：node scripts/assemble-payload.mjs [选项]',
     '',
     '  --from <dir>      pi 产物目录（默认 ../pi-desktop-hos/pi-dist）',
-    '  --out <dir>       输出目录：路线 ① = 投放目录；路线 ② = 暂存目录',
-    '  --route <r>       readonly（默认，零解压直读）| tar（单个 tar.gz）',
+    '  --out <dir>       路线 ① = 投放目录；路线 ② = 暂存目录（归档永远写到 resfile/pi-web/）',
+    '  --route <r>       tar（默认，单个 tar.gz + pi-web.version，发版用）| readonly（诊断用，整树投放）',
     '  --apply           真正写盘（默认只做 dry run 并打印计划）',
     '  --force           目标已存在且非空时也继续（会先清空目标）',
     '  --keep-staging    路线 ②：保留暂存目录（默认打完包就删）',
-    '  --bridge <dir>    库目录（默认 ../ohos-node-bridge）；取其 payload/ 三件随包投放',
-    '  --rawfile <dir>   rawfile 投放目录（默认 entry/src/main/resources/rawfile）',
-    '  --skip-rawfile    不投放引导器三件到 rawfile（路线 ② 将无法物化 bootstrap）',
+    '  --bridge <dir>    库目录（默认 ../ohos-node-bridge）；取其 payload/ 三件随包投放（resfile + 归档内各一份）',
     '  --json <path>     把机器可读报告写到该路径',
     '  --quiet           少打印（仍打印总计）',
     '  --help            显示本帮助'
@@ -199,8 +223,9 @@ function planCrop(sourceFiles) {
   const survivors = [];
 
   for (const file of sourceFiles) {
-    const matches = CROP_RULES.filter((rule) => !ruleMatchesDir(path.posix.dirname(file.rel), rule)
-      && ruleMatchesFile(file.rel, rule));
+    // 逐文件判定（**不再**排除「父目录被整目录裁掉」的文件）：整目录裁掉的文件同样是「会被删掉的文件」，
+    // 排除它们会让计划数比实际少（实测差 4 个文件：node_modules/node-pty 顶层文件按目录裁剪走）。
+    const matches = CROP_RULES.filter((rule) => ruleMatchesFile(file.rel, rule));
     if (matches.length === 0) {
       // 白名单保住的也会走到这里（matchesFileForRule 已排除），用一次额外判定把「被保留」单独记录
       const keptBy = CROP_RULES.find((rule) => patternHits(rule.pattern, file.rel));
@@ -208,7 +233,12 @@ function planCrop(sourceFiles) {
       else survivors.push(file);
       continue;
     }
-    if (matches.length > 1) overlaps.push({ file, rules: matches.map((r) => r.id) });
+    // 预期重叠（规则自己声明了 expectOverlapWith）不算告警，但仍计入「实际重叠」以便评审核对。
+    if (matches.length > 1) {
+      const first = matches[0].id;
+      const unexpected = matches.slice(1).filter((rule) => !isExpectedOverlap(first, rule.id));
+      if (unexpected.length > 0) overlaps.push({ file, rules: matches.map((r) => r.id) });
+    }
     const bucket = perRule.get(matches[0].id);
     bucket.files.push(file);
     bucket.bytes += file.size || 0;
@@ -227,9 +257,9 @@ function printPlan(opts, sourceFiles, plan) {
   console.log(`源规模      : ${sourceFiles.length} 文件 / ${human(beforeBytes)}`);
   console.log(`投放路线    : ${opts.route}${opts.route === 'readonly' ? '（只读直读，零解压）' : '（tar.gz + Node 自解包）'}`);
   console.log(`输出目标    : ${opts.route === 'readonly' ? (opts.out || DEFAULT_OUT_READONLY) : (opts.out || DEFAULT_STAGE)}`);
-  if (opts.route === 'tar') console.log(`归档目标    : ${DEFAULT_TAR}`);
-  console.log(`库载荷三件  : ${opts.bridge}/payload → ${BRIDGE_PAYLOAD_FILES.join(' / ')}`);
-  console.log(`rawfile 投放: ${opts.skipRawfile ? '（--skip-rawfile：不投放）' : opts.rawfile}`);
+  if (opts.route === 'tar') console.log(`归档目标    : ${DEFAULT_TAR}（+ ${DEFAULT_VERSION}）`);
+  console.log(`库载荷三件  : ${opts.bridge}/payload → ${BRIDGE_PAYLOAD_FILES.join(' / ')}（投放 resfile/pi-web/ + 归档内各一份）`);
+  console.log(`应用载荷覆盖: ${APP_PAYLOAD_ENTRIES.join(' / ')}（同上，缺失则 entry/env 契约都不成立）`);
   console.log('');
   console.log('── 逐规则裁剪明细 ────────────────────────────────────────────────────────');
   let plannedBytes = 0;
@@ -282,11 +312,31 @@ function printPlan(opts, sourceFiles, plan) {
 // ── 复制（裁剪发生在复制过程中） ───────────────────────────────────────────────
 
 /**
+ * 去掉 Windows 扩展长度路径前缀（`\\?\` / `\\?\UNC\`）。
+ *
+ * 为什么必须有这一步（**实测根因**，见 DEV_CHECKLIST）：
+ * `fs.cp` 把 filter 的 `src` 参数交给回调时，**Node 18 会带上 `\\?\C:\…` 前缀，Node 24 不带**。
+ * 于是 `path.relative(fromDir, src)` 在 Node 18 下算出 `..\..\?\C:\…` 这类**垃圾相对路径**，
+ * 所有裁剪规则都失配 ⇒ filter 对每个条目都返回 true ⇒ **整树被静默原样复制**（实测：
+ * `--apply` 产出 27,232 文件 / 884,167,367 B = 源树原样，而 dry run 报告「应裁 142 文件」）。
+ * 判据两端都先归一化，两种 Node 行为就一致了。
+ */
+function stripLongPathPrefix(text) {
+  const value = String(text);
+  if (value.startsWith('\\\\?\\UNC\\')) return `\\\\${value.slice(8)}`;
+  if (value.startsWith('\\\\?\\')) return value.slice(4);
+  if (value.startsWith('//?/UNC/')) return `//${value.slice(8)}`;
+  if (value.startsWith('//?/')) return value.slice(4);
+  return value;
+}
+
+/**
  * 用 `fs.cp(..., { filter })` 做**流式**复制，并在 filter 里执行裁剪：
  * 被裁掉的文件**根本不复制**（源目录保持原样，也就不存在「拷完再删」的中间态）。
  * @returns {{ copiedFiles: number, copiedBytes: number, skippedFiles: number, skippedBytes: number, keptFiles: number }}
  */
 async function copyCropped(fromDir, toDir, opts) {
+  const fromNorm = stripLongPathPrefix(fromDir);
   const stats = {
     copiedFiles: 0, copiedBytes: 0,
     skippedFiles: 0, skippedBytes: 0,
@@ -302,7 +352,7 @@ async function copyCropped(fromDir, toDir, opts) {
     force: true,
     errorOnExist: false,
     filter: (src) => {
-      const rel = path.relative(fromDir, src).split(path.sep).join('/');
+      const rel = path.relative(fromNorm, stripLongPathPrefix(src)).split(path.sep).join('/');
       if (rel === '') return true;
       let stat;
       try {
@@ -344,18 +394,27 @@ async function copyCropped(fromDir, toDir, opts) {
  * 为什么要显式返回 null：早先的实现「在最后一个 `/` 处切开、名超出 100 字节就截断」，
  * 会把「长目录 + 长文件名」的条目**静默改名**（实测：`.txt` 后缀被切掉）—— 归档于是静默损坏。
  * 现在只允许**完整放得下**的拆分，放不下就走长名条目。
+ *
+ * ⚠️ 目录条目（名字以 `/` 结尾）必须先摘掉结尾的 `/` 再拆分：直接按最后一个 `/` 拆会得到
+ * `name=''` + `prefix=<整条路径>`，而**空名字的头块首字节是 0** —— 读端（库的
+ * `lib/tar-extract.js`）会把它当成「归档结束块」，于是整卷解包在第一个长目录处硬失败
+ * （实测：`FATAL tar: malformed end block ... at offset 3072`，27k 文件一个都没解出来）。
  */
 function splitUstarName(name) {
   const bytes = (text) => Buffer.byteLength(text, 'utf8');
+  const isDir = name.endsWith('/');
+  // 目录名去掉结尾 '/' 后再算长度；能整体放进 100 字节就保持原样（含结尾 '/'）
+  const core = isDir ? name.slice(0, -1) : name;
   if (bytes(name) <= 100) {
     return { headerName: name, prefix: '' };
   }
-  const slash = name.lastIndexOf('/');
+  const slash = core.lastIndexOf('/');
   if (slash > 0) {
-    const prefix = name.slice(0, slash);
-    const base = name.slice(slash + 1);
-    if (bytes(base) <= 100 && bytes(prefix) <= 155) {
-      return { headerName: base, prefix };
+    const prefix = core.slice(0, slash);
+    const base = core.slice(slash + 1);
+    const headerName = isDir ? `${base}/` : base;
+    if (bytes(headerName) <= 100 && bytes(prefix) <= 155) {
+      return { headerName, prefix };
     }
   }
   return null;
@@ -440,7 +499,15 @@ async function writeTarGz(rootDir, outPath, opts) {
   });
 
   for (const dir of dirList) {
-    await write(ustarHeader(`${dir}/`, 0, '5'));
+    const dirName = `${dir}/`;
+    const dirNeedsLongName = splitUstarName(dirName) === null;
+    if (dirNeedsLongName) {
+      const longDir = Buffer.from(dirName, 'utf8');
+      await write(ustarHeader('././@LongLink', longDir.length + 1, 'L'));
+      await write(Buffer.concat([longDir, Buffer.from([0])]));
+      await write(Buffer.alloc(padTo512(longDir.length + 1)));
+    }
+    await write(ustarHeader(dirNeedsLongName ? truncateUtf8Bytes(dirName, 100) : dirName, 0, '5'));
   }
   for (const file of files) {
     const rel = file.rel;
@@ -490,6 +557,113 @@ async function sha256File(filePath) {
     stream.on('error', reject);
   });
   return hash.digest('hex');
+}
+
+/**
+ * 归档可读性自检（**回归检查**：写出来的 tar 必须能被读端逐块走通）。
+ *
+ * 起因是一次实测：名字超过 100 字节的**目录条目**被写成 `name='' + prefix=<整条路径>`，
+ * 而空名字的头块首字节就是 0 ⇒ 库的 `lib/tar-extract.js` 把它当成「归档结束块」并抛
+ * `malformed end block`，真机上 27k 个文件一个都没解出来（App 不崩、只是永远起不来）。
+ * 这里按 ustar 规范逐块推进：名字不得为空、结束块必须整块全 0、数据必须按 size 对齐。
+ * @returns {Promise<{files: number, dirs: number, longNames: number, ended: boolean}>}
+ */
+async function assertArchiveReadable(tarPath) {
+  const BLOCK = 512;
+  const counters = { files: 0, dirs: 0, longNames: 0 };
+  return await new Promise((resolve, reject) => {
+    const input = fs.createReadStream(tarPath);
+    const gunzip = createGunzip();
+    let carry = Buffer.alloc(0);
+    let bufStart = 0;
+    let state = 'header';
+    let entry = null;
+    let ended = false;
+    let failed = false;
+    const isZero = (block) => {
+      for (let i = 0; i < block.length; i += 1) if (block[i] !== 0) return false;
+      return true;
+    };
+    const fieldText = (buf, start, end) => buf.subarray(start, end).toString('utf8').replace(/\0+$/, '');
+    const push = (chunk) => {
+      const buf = carry.length > 0 ? Buffer.concat([carry, chunk]) : chunk;
+      let pos = 0;
+      while (pos < buf.length) {
+        if (state === 'header') {
+          if (buf.length - pos < BLOCK) break;
+          const header = buf.subarray(pos, pos + BLOCK);
+          const at = bufStart + pos;
+          pos += BLOCK;
+          if (header[0] === 0) {
+            if (!isZero(header)) {
+              throw new Error(`归档在偏移 ${at} 处的头块首字节为 0 却不是全 0 块（空名字条目会被读端当成结束标记）`);
+            }
+            ended = true;
+            carry = Buffer.alloc(0);
+            return;
+          }
+          const name = fieldText(header, 0, 100);
+          const prefix = fieldText(header, 345, 500);
+          if (name.length === 0) {
+            throw new Error(`归档在偏移 ${at} 处的条目名称为空（prefix=${prefix === '' ? '(空)' : prefix}）`);
+          }
+          const sizeText = header.subarray(124, 136).toString('latin1').replace(/\0/g, ' ').trim();
+          const size = sizeText === '' ? 0 : parseInt(sizeText, 8);
+          const type = String.fromCharCode(header[156]);
+          if (type === '5') counters.dirs += 1;
+          else if (type === 'L') counters.longNames += 1;
+          else if (type === '0' || type === '\0') counters.files += 1;
+          else throw new Error(`归档含未预期的 typeflag=${JSON.stringify(type)}（${prefix === '' ? name : `${prefix}/${name}`}）`);
+          entry = { size, remaining: size, padding: (BLOCK - (size % BLOCK)) % BLOCK };
+          state = 'data';
+          continue;
+        }
+        if (state === 'data') {
+          const n = Math.min(entry.remaining, buf.length - pos);
+          pos += n;
+          entry.remaining -= n;
+          if (entry.remaining === 0) {
+            state = 'padding';
+            continue;
+          }
+          break;
+        }
+        const n = Math.min(entry.padding, buf.length - pos);
+        pos += n;
+        entry.padding -= n;
+        if (entry.padding === 0) {
+          entry = null;
+          state = 'header';
+        } else {
+          break;
+        }
+      }
+      carry = pos < buf.length ? Buffer.from(buf.subarray(pos)) : Buffer.alloc(0);
+      bufStart += pos;
+    };
+    gunzip.on('data', (chunk) => {
+      if (failed) return;
+      try {
+        push(chunk);
+      } catch (err) {
+        failed = true;
+        input.destroy();
+        gunzip.destroy();
+        reject(err);
+      }
+    });
+    gunzip.on('end', () => {
+      if (failed) return;
+      if (!ended) {
+        reject(new Error('归档缺少全 0 结束块（尾部残片非 0 或头部被截断）'));
+        return;
+      }
+      resolve({ files: counters.files, dirs: counters.dirs, longNames: counters.longNames, ended });
+    });
+    gunzip.on('error', reject);
+    input.on('error', reject);
+    input.pipe(gunzip);
+  });
 }
 
 // ── 目标合法性（绝不偷偷写到项目外） ─────────────────────────────────────────────
@@ -593,6 +767,86 @@ async function stageBridgeFiles(files, targetDir, label) {
   }
 }
 
+/**
+ * 收集**应用自己的载荷覆盖层**（`payload/`：`pi-web-launch.js` + `env.js` + `extensions/` + `config/`）。
+ *
+ * 为什么不能漏：这三类文件不在 `pi-dist` 里（它们属于本工程），实测漏投的后果是
+ * `report.target.entryPresent=false`、真机上启动器 `require('./env.js')` 直接失败。
+ * @returns {{ root: string, files: Array<{rel: string, abs: string, bytes: number}>, missing: string[] }}
+ */
+function collectAppPayloadFiles(appDir) {
+  const files = [];
+  const missing = [];
+  for (const entry of APP_PAYLOAD_ENTRIES) {
+    const abs = path.join(appDir, entry);
+    if (!fs.existsSync(abs)) {
+      missing.push(abs);
+      continue;
+    }
+    const stat = fs.statSync(abs);
+    if (stat.isFile()) {
+      files.push({ rel: entry, abs, bytes: stat.size });
+      continue;
+    }
+    for (const child of walkTree(abs).filter((f) => f.error === undefined)) {
+      files.push({ rel: `${entry}/${child.rel}`, abs: child.abs, bytes: child.size });
+    }
+  }
+  files.sort((a, b) => a.rel.localeCompare(b.rel));
+  return { root: appDir, files, missing };
+}
+
+/**
+ * 裁剪生效断言（**回归检查**：Dry run 说裁了、`--apply` 必须真的裁掉）。
+ *
+ * 起因是一次实测：dry run 报告「将裁剪 142 文件」，`--apply` 却产出 27,232 文件 / 884,167,367 B
+ * （= 源树原样）。根因是 Node 18 给 filter 的 `src` 带 `\\?\` 前缀（见 stripLongPathPrefix）。
+ * 光修那一处还不够 —— 断言必须留在流程里，否则「规则静默失配」还能再发生一次。
+ * @returns {{ files: number, wasmSwcFiles: number }}
+ */
+function assertCropApplied(targetDir, stats, plan) {
+  const files = walkTree(targetDir).filter((f) => f.error === undefined);
+  // 判据**只有一份**：直接用 crop-rules.mjs 的 ruleMatchesFile（含 keepPathMarkers / skipPrefixes），
+  // 不再在这里手写第二份「禁项清单」—— 两份清单迟早会不一致（上一轮就是这么漏掉 @tailwindcss 的）。
+  const violations = [];
+  for (const file of files) {
+    for (const rule of CROP_RULES) {
+      if (ruleMatchesFile(file.rel, rule)) {
+        violations.push(`[${rule.id}] ${file.rel}`);
+        break;
+      }
+    }
+  }
+  const wasmSwc = files.filter((f) => f.rel.startsWith('node_modules/next/wasm/@next/swc-wasm-nodejs/'));
+  let plannedFiles = 0;
+  if (plan) for (const bucket of plan.perRule.values()) plannedFiles += bucket.files.length;
+  const croppedEntries = stats ? stats.skippedFiles + stats.skippedDirs : 0;
+  if (plannedFiles > 0 && croppedEntries === 0) {
+    throw new Error(`裁剪未生效：dry run 计划裁 ${plannedFiles} 个条目，实际裁掉 0 个（filter 判据与 plan 的 matcher/路径形态不一致）`);
+  }
+  if (violations.length > 0) {
+    throw new Error(`裁剪后目标树仍含被裁项（${violations.length} 个，前 5 个）：`
+      + `\n        ${violations.slice(0, 5).join('\n        ')}`);
+  }
+  if (wasmSwc.length === 0) {
+    throw new Error('裁剪后目标树缺少 node_modules/next/wasm/@next/swc-wasm-nodejs/'
+      + '（端上唯一可用的 SWC 是 WASM 版，白名单必须保住它）');
+  }
+  // 反向断言：@next/env 必须被保住（Next 的 next/dist 里有 14 处 require('@next/env')）
+  const nextEnv = files.filter((f) => f.rel === 'node_modules/@next/env/dist/index.js');
+  if (nextEnv.length === 0) {
+    throw new Error('裁剪后目标树缺少 node_modules/@next/env/dist/index.js'
+      + '（@next/env 是 JS 运行时模块，删掉后 Next 在真机上必然 Cannot find module）');
+  }
+  // 反向断言：纯 JS 依赖不许被 *.node 规则误伤（prepare-next.mjs:279-280 明示保留）
+  for (const required of ['node_modules/undici/package.json', 'node_modules/@earendil-works/pi-coding-agent/package.json']) {
+    if (!files.some((f) => f.rel === required)) {
+      throw new Error(`裁剪后目标树缺少纯 JS 依赖：${required}（platform-native 规则必须跳过 undici/web-push/@earendil-works）`);
+    }
+  }
+  return { files: files.length, wasmSwcFiles: wasmSwc.length, nextEnvFiles: nextEnv.length };
+}
+
 // ── 主流程 ────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -628,6 +882,14 @@ async function main() {
     return 2;
   }
 
+  // 应用载荷覆盖层预检：启动器/env.js/extensions/config 由本工程提供（不在 pi-dist 里），
+  // 缺失必须硬失败（否则真机上表现为「入口缺失 / require('./env.js') 抛错」）。
+  const appPayload = collectAppPayloadFiles(APP_PAYLOAD_DIR);
+  if (appPayload.missing.length > 0) {
+    console.error('✗ 应用载荷覆盖层缺失（payload/ 下必须齐备，否则入口与 env 契约都投不进去）：');
+    for (const missing of appPayload.missing) console.error(`    ${missing}`);
+    return 2;
+  }
   const sourceFiles = walkTree(opts.from).filter((f) => f.error === undefined);
   const plan = planCrop(sourceFiles);
   const totals = printPlan(opts, sourceFiles, plan);
@@ -662,18 +924,23 @@ async function main() {
     await assertEmptyOrForce(target, opts.force);
     console.log(`→ 复制（裁剪在复制过程中执行）：${opts.from} → ${target}`);
     const stats = await copyCropped(opts.from, target, opts);
+    const cropCheck = assertCropApplied(target, stats, plan); // 回归检查：dry run 说裁了，这里必须真裁掉
     await stageBridgeFiles(bridge.files, target, '投放库载荷');
     console.log(`库载荷三件  : 已投放 ${bridge.files.length} 个（${BRIDGE_PAYLOAD_FILES.join(' / ')}）`);
+    await stageBridgeFiles(appPayload.files, target, '投放应用载荷');
+    console.log(`应用载荷覆盖: 已投放 ${appPayload.files.length} 个（${APP_PAYLOAD_ENTRIES.join(' / ')}）`);
     const readmePath = path.join(target, 'PAYLOAD_README.md');
     await fsp.writeFile(readmePath, payloadReadme(opts.route, stats.copiedFiles, stats.copiedBytes), 'utf8');
     const resultFiles = walkTree(target).filter((f) => f.error === undefined);
+    const entryAbs = path.join(target, ENTRY_REL);
     console.log('── 结果 ─────────────────────────────────────────────────────────────────');
     console.log(`复制文件    : ${stats.copiedFiles} / ${human(stats.copiedBytes)}`);
     console.log(`裁剪文件    : ${stats.skippedFiles} 文件 + ${stats.skippedDirs} 个整目录 / ${human(stats.skippedBytes)}`);
+    console.log(`裁剪断言    : 通过（0 个 *.nft.json / @next/swc-* 原生包 / @img / node-pty；WASM SWC ${cropCheck.wasmSwcFiles} 文件在位；@next/env 在位）`);
     console.log(`白名单保住  : ${stats.keptFiles} 文件`);
     console.log(`目标实测    : ${resultFiles.length + 1} 文件（含 PAYLOAD_README.md）/ ${human(totalBytes(resultFiles) + Buffer.byteLength(payloadReadme(opts.route, 0, 0)))}`);
     console.log(`说明文件    : ${readmePath}`);
-    console.log(`入口        : ${path.join(target, ENTRY_REL)}（${fs.existsSync(path.join(target, ENTRY_REL)) ? '存在' : '缺失！载荷里必须带它'}）`);
+    console.log(`入口        : ${entryAbs}（${fs.existsSync(entryAbs) ? '存在' : '缺失！载荷里必须带它'}）`);
     console.log(`库引导器    : ${path.join(target, BRIDGE_PAYLOAD_FILES[0])}`
       + `（${fs.existsSync(path.join(target, BRIDGE_PAYLOAD_FILES[0])) ? '存在' : '缺失！路线 ① 会判定失败'}）`);
     report.target = {
@@ -681,37 +948,70 @@ async function main() {
       dir: target,
       files: stats.copiedFiles,
       bytes: stats.copiedBytes,
-      entry: path.join(target, ENTRY_REL),
-      entryPresent: fs.existsSync(path.join(target, ENTRY_REL)),
+      entry: entryAbs,
+      entryPresent: fs.existsSync(entryAbs),
+      cropCheck,
       bridgeStaged: bridge.files.map((f) => f.rel),
+      appPayloadStaged: appPayload.files.map((f) => f.rel),
       bootstrap: path.join(target, BRIDGE_PAYLOAD_FILES[0]),
       bootstrapPresent: fs.existsSync(path.join(target, BRIDGE_PAYLOAD_FILES[0]))
     };
   } else {
     const stage = assertWritableTarget(stageDir, opts.out);
     await assertEmptyOrForce(stage, opts.force);
-    console.log(`→ 暂存复制（裁剪在复制过程中执行）：${opts.from} → ${stage}`);
-    const stats = await copyCropped(opts.from, stage, opts);
-    await stageBridgeFiles(bridge.files, stage, '入归档');
+    // 归档内必须自带 `pi-web/` 这一层：两条路线的 entry 都是 `pi-web/pi-web-launch.js`，
+    // 路线 ② 解到 `<payloadRoot>/<sha256[:12]>/` ⇒ 落点才会是 `<…>/pi-web/pi-web-launch.js`。
+    const tarRoot = path.join(stage, TAR_ROOT);
+    console.log(`→ 暂存复制（裁剪在复制过程中执行）：${opts.from} → ${tarRoot}（归档内根目录 ${TAR_ROOT}/）`);
+    const stats = await copyCropped(opts.from, tarRoot, opts);
+    const cropCheck = assertCropApplied(tarRoot, stats, plan); // 回归检查：dry run 说裁了，这里必须真裁掉
+    await stageBridgeFiles(bridge.files, tarRoot, '入归档');
+    await stageBridgeFiles(appPayload.files, tarRoot, '入归档');
+    console.log(`应用载荷覆盖: 已入归档 ${appPayload.files.length} 个（${APP_PAYLOAD_ENTRIES.join(' / ')}）`);
     console.log(`→ 打包 tar.gz：${stage} → ${DEFAULT_TAR}`);
     const tarFiles = await writeTarGz(stage, DEFAULT_TAR, opts);
     const sha = await sha256File(DEFAULT_TAR);
     const shaShort = sha.slice(0, 12);
     const tarBytes = fs.statSync(DEFAULT_TAR).size;
-    const shaPath = `${DEFAULT_TAR}.sha256`;
-    await fsp.writeFile(
-      shaPath,
-      `${sha}\n# pi-web.tar.gz sha256=${sha} first12=${shaShort} bytes=${tarBytes} files=${tarFiles.length} at=${new Date().toISOString()} route=tar\n`,
-      'utf8'
-    );
+    const entryAbs = path.join(tarRoot, ENTRY_REL);
+    const entryPresent = fs.existsSync(entryAbs);
+    // 版本文件与 pi-desktop-hos/pi-dist.version 同形：**首行 64 位 hex + \n**（65 B），
+    // 前 64 hex = 幂等键（交给 options.archiveSha256）；审计信息只进控制台与 --json 报告，
+    // 避免时间戳把版本文件变成非确定性产物（两次 --apply 必须得到同一个 sha256）。
+    await fsp.writeFile(DEFAULT_VERSION, `${sha}\n`, 'utf8');
+    const versionBytes = fs.statSync(DEFAULT_VERSION).size;
+    const readable = await assertArchiveReadable(DEFAULT_TAR); // 回归检查：写出来的归档必须能被读端走通
+    // 路线 ② 的**运行期依赖**也落在 resfile/pi-web/：bootstrap.js 是交给库的 scriptPath，
+    // host.js / lib/tar-extract.js 是它的同级依赖 —— 三者都必须能被 Node 的 fs 直接打开。
+    // ⚠️ 这里只投放**引导器三件 + 应用覆盖层**（几十 KB），绝不投放解开的 2.7 万文件树。
+    console.log(`→ resfile 投放（运行期 fs 直读）：${RESFILE_PAYLOAD_DIR}`);
+    await fsp.mkdir(RESFILE_PAYLOAD_DIR, { recursive: true });
+    await stageBridgeFiles(bridge.files, RESFILE_PAYLOAD_DIR, 'resfile');
+    const resfileBootstrap = path.join(RESFILE_PAYLOAD_DIR, BRIDGE_PAYLOAD_FILES[0]);
+    const resfileHost = path.join(RESFILE_PAYLOAD_DIR, 'host.js');
+    const resfileTarExtract = path.join(RESFILE_PAYLOAD_DIR, 'lib', 'tar-extract.js');
     console.log('── 结果 ─────────────────────────────────────────────────────────────────');
     console.log(`暂存文件    : ${stats.copiedFiles} / ${human(stats.copiedBytes)}`);
     console.log(`裁剪文件    : ${stats.skippedFiles} 文件 + ${stats.skippedDirs} 个整目录 / ${human(stats.skippedBytes)}`);
+    console.log(`裁剪断言    : 通过（0 个 *.nft.json / @next/swc-* 原生包 / @img / @tailwindcss/oxide* / node-pty；WASM SWC ${cropCheck.wasmSwcFiles} 文件在位；@next/env 在位）`);
     console.log(`归档        : ${DEFAULT_TAR}`);
+    console.log(`归档自检    : 通过（${readable.files} 文件条目 / ${readable.dirs} 目录条目 / ${readable.longNames} 个 GNU 长名条目；结束块=${readable.ended ? '在位' : '缺失'}）`);
     console.log(`归档大小    : ${human(tarBytes)}`);
+    console.log(`归档内根目录: ${TAR_ROOT}/（entry 落点 = ${TAR_ROOT}/${ENTRY_REL}，与路线 ① 的 entry 同形）`);
     console.log(`SHA-256     : ${sha}`);
     console.log(`前 12 位    : ${shaShort}   ← 幂等键（NodeRuntimeOptions.archiveSha256 / 契约 §3.2）`);
-    console.log(`哈希旁文件  : ${shaPath}`);
+    console.log(`版本文件    : ${DEFAULT_VERSION}（${versionBytes} B，首行 64 位 hex）`);
+    console.log(`归档入口    : ${entryAbs}（${entryPresent ? '存在' : '缺失！载荷里必须带它'}）`);
+    console.log(`scriptPath  : ${resfileBootstrap}（${fs.existsSync(resfileBootstrap) ? '存在' : '缺失！路线 ② 判定会失败'}）`);
+    console.log(`引导器依赖  : ${resfileHost}（${fs.existsSync(resfileHost) ? '在位' : '缺失'}）/ ${resfileTarExtract}（${fs.existsSync(resfileTarExtract) ? '在位' : '缺失'}）`);
+    // 硬断言：运行期要用的三件事必须同时在 resfile 里，否则真机会以「找不到引导器 / 归档」失败。
+    if (!entryPresent) throw new Error(`归档内缺少入口：${entryAbs}（应用载荷覆盖层没进归档）`);
+    if (!fs.existsSync(resfileBootstrap) || !fs.existsSync(resfileHost) || !fs.existsSync(resfileTarExtract)) {
+      throw new Error('resfile 里缺少引导器三件之一（scriptPath 及其依赖必须 fs 可读）');
+    }
+    if (!fs.existsSync(DEFAULT_VERSION) || fs.statSync(DEFAULT_VERSION).size !== 65) {
+      throw new Error(`版本文件异常（应为 64 hex + 换行 = 65 B）：${DEFAULT_VERSION}`);
+    }
     if (!opts.keepStaging) {
       await fsp.rm(stage, { recursive: true, force: true });
       console.log(`暂存目录已删除（--keep-staging 可保留）：${stage}`);
@@ -722,24 +1022,23 @@ async function main() {
       archiveBytes: tarBytes,
       sha256: sha,
       sha256Short: shaShort,
-      sha256Sidecar: shaPath,
+      versionFile: DEFAULT_VERSION,
+      versionFileBytes: versionBytes,
+      resfileDir: RESFILE_PAYLOAD_DIR,
+      resfileBootstrap,
+      resfileBootstrapPresent: fs.existsSync(resfileBootstrap),
+      tarRoot: `${TAR_ROOT}/`,
+      entry: entryAbs,
+      entryPresent,
+      cropCheck,
+      archiveCheck: readable,
       files: tarFiles.length,
       staging: opts.keepStaging ? stage : null,
-      bridgeStaged: bridge.files.map((f) => f.rel)
+      bridgeStaged: bridge.files.map((f) => f.rel),
+      appPayloadStaged: appPayload.files.map((f) => f.rel)
     };
   }
 
-  // F4：把引导器三件投放到 rawfile（**默认开**；`--skip-rawfile` 可关）。
-  // 应用侧用 `getRawFileContentSync` 物化它们 —— 路线 ② 的 bootstrap.js 必须在解包**之前**就可执行，
-  // 而 HAR 不带 payload/，rawfile 是唯一随包通道（`rawfile/lib/tar-extract.js` 保留 lib 层级）。
-  if (opts.skipRawfile) {
-    console.log('· --skip-rawfile：未投放引导器三件到 rawfile（路线 ② 将无法物化 bootstrap）');
-  } else {
-    console.log(`→ rawfile 投放（应用物化引导器用）：${opts.rawfile}`);
-    await fsp.mkdir(opts.rawfile, { recursive: true });
-    await stageBridgeFiles(bridge.files, opts.rawfile, 'rawfile');
-    report.rawfile = { dir: opts.rawfile, files: bridge.files.map((f) => f.rel) };
-  }
   if (opts.json !== '') {
     await fsp.mkdir(path.dirname(opts.json), { recursive: true });
     await fsp.writeFile(opts.json, `${JSON.stringify(report, null, 2)}\n`, 'utf8');

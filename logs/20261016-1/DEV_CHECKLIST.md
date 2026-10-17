@@ -328,3 +328,164 @@ python -c "import zipfile,json; z=zipfile.ZipFile('entry/build/default/outputs/d
 | 真机三路线端到端（`[bootstrap] entry=…`、解包跳过判定、端口读回、截图） | 本会话**没有设备** |
 | 路线 ① 真实布局 `resfile/pi-web/{pi-web-launch.js,bootstrap.js,host.js,lib/…}` | `pi-dist` 不含应用侧载荷 ⇒ 装配产物 `entryPresent=false`；需先有载荷覆盖层 |
 | 路线 ② 归档内 `entry='pi-web/pi-web-launch.js'` 的解析 | 归档根目前 = `pi-dist` 内容（**没有 `pi-web/` 这一层**，也不含 `pi-web-launch.js`）：要跑通，装配需把应用载荷放进 `pi-web/` 层。本轮按契约指定形状传参并如实记录该依赖，未私自改布局 |
+
+---
+
+## 7. 载荷打包重构 + 真机验证（2026-10-17，第三轮；requirement 000-scaffold）
+
+> 目标：把 `pi-desktop-ark` 的载荷打包改成**与已跑通的 `pi-desktop-hos` 同形**，并在真机
+> （HAD-W32 / API 26 / 序列号 `3QC0226526001227`）上端到端验一遍。
+>
+> 对齐基线：`pi-desktop-hos/scripts/collect-pi.mjs:7`（ustar 归档理由）、`:431-471`（打包 + sha256）、
+> `collect-app.mjs:5-14,76-86`（投放到 **resfile**，不是 rawfile）、`prepare-next.mjs:29-31,262-268,287-298`、
+> `src-main/main.js:40-45`（resfile 里的 tar 可被 Node 直读）、`:502-543`（sha256 marker 幂等）。
+
+### 7.1 P0 载荷路线重做（代码）
+
+| 位置 | 改动 |
+|---|---|
+| `entry/src/main/ets/common/Constants.ets:35-51` | 删 `ARCHIVE_RAWFILE` / `ARCHIVE_SHA256_RAWFILE` / `ARCHIVE_STAGED_NAME` / `BRIDGE_TAR_EXTRACT_RAWFILE` / `BRIDGE_RAWFILES` / `rawfileDirFromResourceDir()`；新增 `ARCHIVE_REL='pi-web/pi-web.tar.gz'`、`ARCHIVE_VERSION_REL='pi-web/pi-web.version'`（**相对 `context.resourceDir`**） |
+| `entry/src/main/ets/app/PiDesktopRuntime.ets:382-417` | 路线 ② 判据改为 **resfile 上的真实 `fs` 检查**（`readonlyRoot + '/pi-web/pi-web.tar.gz'`）；`scriptPath=readonlyRoot+'/pi-web/bootstrap.js'`、`entry='pi-web/pi-web-launch.js'`、`archive`/`archiveSha256` 直接取 resfile 里的归档与 `pi-web.version`、`payloadRoot=<filesDir>/payload`；**不再做任何物化搬运** |
+| 同文件 | 删除 `rawfileExists()` / `materializeBridge()` / `materializeRawArchive()` / `utf8()`；`materializeRawfile()` 仅保留给 SELFCHECK（`selfcheck.js` 走 `$rawfile` → resourceManager） |
+| 同文件 `invalidateReadyMarker()` | 投递前作废上一轮 `payload/pi-web.ready.json`（修「重启读到旧端口」） |
+| 同文件 `logsToTextSince(runtime,200,launchStartedAt)` | 端口回退解析**只认本轮日志行**（`entry.at >= launchStartedAt`），`at=0` 的行保留（修「读到上一轮 PI_WEB_READY」） |
+| `.gitignore` | 只保留 `entry/src/main/resources/resfile/pi-web/`（整目录派生：归档 + version + 引导器三件）；删掉 rawfile 的派生条目 |
+
+### 7.2 P1 脚本成为唯一事实源
+
+```bash
+cd /d/pi-workspace/pi-desktop-ark
+NODE18="/d/oh-workspace/DevEco Studio/tools/node/node.exe"   # v18.20.1（文档化流程里 PATH 首位就是它）
+"$NODE18" scripts/assemble-payload.mjs --quiet          # dry run
+"$NODE18" scripts/assemble-payload.mjs --apply --quiet  # 裁剪 + 打包 + 投放 resfile
+```
+
+观测（两次独立 `--apply`，间隔约 16 min）：
+
+| 项 | 第一次 | 第二次 |
+|---|---|---|
+| 计划（dry run，与实测一致） | 142 文件 / 509,987,689 B → 27,090 文件 / 374,179,678 B | 同 |
+| 暂存实测 | **27,090 文件 / 374,179,678 B** | 同 |
+| 裁剪实测 | **79 文件 + 2 个整目录 / 454,288,178 B** | 同 |
+| 归档 | `resfile/pi-web/pi-web.tar.gz` **84,538,840 B** | 同 |
+| SHA-256 | `e1db33d73a20574d79276082c74e0ecec802fb80e2fe466efd1267050a1a47ef` | **同**（`cmp` 逐字节相同） |
+| `pi-web.version` | 65 B，首行即上面那串 | 同 |
+| 归档自检 | 27,101 文件条目 / 2,708 目录条目 / 0 个 GNU 长名 / 结束块在位 | 同 |
+| 耗时 | 15 m 02 s | 16 m 15 s（≈380 MB 复制 + gzip -9） |
+
+- **裁剪真的生效了**：上一轮 dry run 报 142 却复制了 27,232 文件 —— 根因是 Node 18 给 `fs.cp` 的
+  `filter(src)` 带 `\\?\` 前缀（`stripLongPathPrefix()` 已修），且计划里排除了「父目录被整目录裁掉」的
+  文件（本轮改成逐文件判定，计划与实测差额从 4 个文件变 0）。`assertCropApplied()` 现在直接用
+  `crop-rules.mjs` 的 `ruleMatchesFile` 遍历产物：零被裁项 + WASM SWC 在位 + `@next/env` 在位 +
+  undici/`@earendil-works` 未被误伤，四类断言全过。
+- 裁剪规则升级（`scripts/crop-rules.mjs`，每条带 `evidence` / `planRef` / **`prepareRef`**）：
+  `next-nft-json` · `next-swc-win32` · `next-swc-native`（keep `node_modules/next/wasm/**`）· `img-sharp` ·
+  `tailwind-oxide` · `node-pty-prebuilds` · `node-pty` · `platform-native`
+  （`node_modules/**/*.node` + `KEEP_PATH_MARKERS=['linux-arm64','arm64','ohos']` + 跳过
+  `undici`/`web-push`/`@earendil-works`）。本机命中：76+3+20+0+10+33+0 = 142 文件。
+- 应用载荷覆盖层（8 文件）已进归档与 resfile；归档内 entry = `pi-web/pi-web-launch.js`
+  （`entryPresent=true`）。
+
+### 7.3 真机验证（HAD-W32 / API 26 / `3QC0226526001227`）
+
+```bash
+export DEVECO_SDK_HOME='D:\oh-workspace\command-line-tools\sdk'
+export PATH="/d/oh-workspace/command-line-tools/bin:/d/oh-workspace/DevEco Studio/tools/node:$PATH"
+cmd //c "D:\oh-workspace\command-line-tools\bin\hvigorw.bat assembleHap --mode module -p product=default -p buildMode=debug --no-daemon"
+# BUILD SUCCESSFUL in 28 s 965 ms（仅既有 ArkTS WARN「Function may throw exceptions」）
+
+HDC="/d/oh-workspace/DevEco Studio/sdk/default/openharmony/toolchains/hdc.exe"
+"$HDC" uninstall org.fellow99.pi.PiDesktopArk
+"$HDC" install -r entry/build/default/outputs/default/entry-default-signed.hap
+"$HDC" shell "aa start -a EntryAbility -b org.fellow99.pi.PiDesktopArk"
+```
+
+**① HAP 产物**（`.hap` 是 zip，用 python `zipfile` 查，不查磁盘）：
+
+| 项 | 值 |
+|---|---|
+| `entry-default-signed.hap` | **130,566,051 B**（上一轮 46,022,785 B；+84 MB 即归档本体） |
+| resfile 条目 | `resources/resfile/pi-web/{bootstrap.js, host.js, lib/tar-extract.js, pi-web.tar.gz(84,538,840 B, **stored**), pi-web.version(65 B)}` |
+| rawfile 条目 | 仅 `boot.html` / `error.html` / `selfcheck.js`（**归档与引导器三件已不在 rawfile**） |
+
+**② 首启（uninstall → install → start）：路线 ② 命中、无 Cpp Crash、进程存活**
+
+```bash
+BASE=/data/app/el2/100/base/org.fellow99.pi.PiDesktopArk/haps/entry/files
+"$HDC" shell "ls $BASE/payload"     # app.log  e1db33d73a20  node.log  pi-web.ready.json
+"$HDC" shell "grep -nE 'bootstrap|archive=|extracted|runRoot|entry=' $BASE/payload/node.log | head -20"
+```
+
+```
+5:  [node_bridge] env NODE_BRIDGE_ARCHIVE=/data/storage/el1/bundle/entry/resources/resfile/pi-web/pi-web.tar.gz
+6:  [node_bridge] env NODE_BRIDGE_ARCHIVE_SHA256=e1db33d73a20574d79276082c74e0ecec802fb80e2fe466efd1267050a1a47ef
+7:  [node_bridge] env NODE_BRIDGE_READONLY_ROOT=/data/storage/el1/bundle/entry/resources/resfile
+24: [node_bridge] argv[2]=/data/storage/el1/bundle/entry/resources/resfile/pi-web/bootstrap.js
+28: [bootstrap] node=v24.2.0 platform=openharmony arch=arm64 modules=137
+30: [bootstrap] archive=/data/storage/el1/bundle/entry/resources/resfile/pi-web/pi-web.tar.gz sha256=e1db33d7…47ef
+31: [bootstrap] extracted dir=…/payload/e1db33d73a20 files=27101 dirs=2708 bytes=374317294 skipped=0 ms=6434 marker=…/.ready-e1db33d73a20
+32: [bootstrap] runRoot=…/payload/e1db33d73a20 route=archive
+47: [bootstrap] entry=…/payload/e1db33d73a20/pi-web/pi-web-launch.js mode=cjs root=… cwd=…/pi-web
+```
+
+- **首启解包成本：6,434 ms**（27,101 文件 / 374,317,294 B，`skipped=0`）。
+- `payload/app.log` **存在**（3,220 B）：`[ready] 第 1 次探测通过：GET /api/web-auth → 200
+  {"enabled":false,"authenticated":true}`、`PI_WEB_READY {"port":40477,…,"elapsedMs":943}`、
+  `已向宿主桥注册 shutdown 钩子（…/resfile/pi-web/host.js…）`。
+- `pidof` = 56366（存活）；`hilog -x | grep -c 'Cpp Crash'` = **0**。
+
+**③ 真实服务（`hdc fport` + `curl`）**
+
+```
+GET /api/web-auth → HTTP/1.1 200 OK … {"enabled":false,"authenticated":true}
+GET /            → HTTP/1.1 200 OK, Content-Length: 10677
+                   <!DOCTYPE html><html lang="en" translate="no" class="__variable_9e44ca notranslate"><head>
+                   <meta charSet="utf-8"/>…<link rel="stylesheet" href="/_next/static/css/9bcd6051db4f8890.css"…
+                   <title>Pi Desktop</title>
+```
+
+（全文存 `docs/evidence/2026-10-17-pi-web-index.html`）
+
+**④ 退出判据：第二次启动必须是 skip**
+
+```
+81:  [bootstrap] payload ready (skip)
+84:  [bootstrap] runRoot=…/payload/e1db33d73a20 route=archive
+     marker=.ready-e1db33d73a20 → {"sha256":"e1db33d7…47ef","files":27101,"bytes":374317294,"skipped":0,"at":1792206508049}
+```
+
+`grep -c 'extracted dir=' node.log` 保持 **1**（没有第二次解包）；首启端口 40477 → 第二次 46619。
+
+**⑤ UI（`snapshot_display` + `hdc file recv` + `uitest dumpLayout`）**
+
+`uitest dumpLayout -p …` **本机可用**。第 5 次启动（端口 36283）的可见文本：
+
+```
+"running" / "阶段：就绪：http://127.0.0.1:36283/" / "已加载本地服务页面：http://127.0.0.1:36283/"
+"Pi Desktop，版本：web 0.12.1，pi 1.2.0"
+"新建" "搜索对话" "会话" "未找到会话" "打开其他项目…"
+"文件" "文件操作" "当前平台不支持" "将文件上传到项目根目录" "0 个变更文件" "搜索文件"
+"项目和 worktree" "选择项目…" "模型" "技能" "设置" "开始使用"
+"1.从侧边栏选择项目目录\n2.打开底部的“设置”，然后选择“模型”"
+```
+
+⇒ ArkWeb 里是**真的 pi-web UI**（会话列表 + 文件面板 + 设置入口；新装无会话，所以是
+「未找到会话 / 开始使用」），不是 `boot.html`。截图：`docs/evidence/2026-10-17-pi-web-ui-ready.jpeg`。
+
+**本轮修掉的两个真机缺陷**
+
+| 现象（实测原文） | 根因 | 修法 |
+|---|---|---|
+| 重启后 UI `FAILED: 探活失败：connect: Failed to connect to the server @ http://127.0.0.1:40477/（端口来自 marker）`，本轮真实端口 46619 | 上一轮的 `pi-web.ready.json` 还在盘上，ArkTS 在**新服务就绪前**就读到旧端口 | `PiDesktopRuntime.invalidateReadyMarker()`：投递前删除 marker |
+| 再启动变成 `… :46619（端口来自 log:PI_WEB_READY）`，本轮真实端口 44031 | 库的 `logs()` 读 `node.log` **尾部**，该文件跨启动累积，端口回退解析读到了上一轮的 `PI_WEB_READY` | `logsToTextSince(…, launchStartedAt)`：只认本轮的行（`at=0` 的行保留） |
+
+### 7.4 仍未验证 / 已知边界（不当已完成）
+
+| 项 | 状态 |
+|---|---|
+| `.nft.json`（76 文件 / 348 MB）可删性的真机长跑（规划 O1） | 本轮「起服务 + 首页 200 + 会话/设置 UI 全在」已通过，但**没跑**完整会话链路（发消息 → SSE → 工具调用） |
+| `@img/sharp-*` 删除后 `next/image` 的服务端优化路径（`images.unoptimized` 由上游产物决定） | 未触发图片优化路由；未逐包核对 |
+| WASM SWC 端上是否真的被使用（O2） | 启动日志里没有 SWC 相关失败，但也没有「使用 WASM SWC」的实证打印 |
+| `hilog -x \| grep PI_DESKTOP_ARK` | 本机为 **0 行**（ArkTS 侧 hilog 未进缓冲区/被轮转）⇒ ArkTS 侧证据改用 `uitest dumpLayout` 的结构化文本 |
+| `hdc shell rm -rf <filesDir>/payload` | 权限不足（`Permission denied`）：清态只能用 `bm uninstall` + 重新 install |
+| 路线 ①（整树投放 resfile） | 仍**不发**：会把 27,090 文件塞进 resfile（hvigor 会拖死）；脚本保留该分支仅作诊断 |

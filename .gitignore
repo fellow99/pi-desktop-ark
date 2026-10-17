@@ -20,13 +20,18 @@ entry/libs/
 # ── 本地依赖（构建产物，不入库）──
 # @fellow99/node-bridge 的 HAR 由 scripts/build-bridge-har.sh 生成
 libs/**/*.har
-entry/src/main/resources/resfile/pi-web/*
-!entry/src/main/resources/resfile/pi-web/README.md
 *.hap
 
-# ── 库自带 Node 侧载荷（**派生**，不入库）──
-# 由 scripts/assemble-payload.mjs 从 ../ohos-node-bridge/payload/ 逐字节拷入（构建期自动完成）。
-# 入库会与库侧副本产生两份事实源；本工程自己的载荷（selfcheck.js / error.html）仍入库。
-entry/src/main/resources/rawfile/bootstrap.js
-entry/src/main/resources/rawfile/host.js
-entry/src/main/resources/rawfile/lib/
+# ── 路线 ② 的载荷（**派生**，不入库）──
+# 由 `node scripts/assemble-payload.mjs --apply`（默认路线 tar）生成，全部落在 HAP 的 resfile 里：
+#   pi-web.tar.gz       裁剪后的 pi-dist + 应用载荷覆盖层，内含 `pi-web/` 一层（约 85 MB）
+#   pi-web.version      归档的 sha256（首行 64 hex）= 运行期幂等键（交给 options.archiveSha256）
+#   bootstrap.js        库引导器 = 库的 scriptPath（HAR 不含 payload/，必须由本应用投放）
+#   host.js             引导器同级依赖（关停钩子注册源）
+#   lib/tar-extract.js  引导器的解包实现（bootstrap require './lib/tar-extract.js'）
+# ⚠️ 五件必须同源同版本：只改其中一件会让「sha256 幂等键」与归档内容不一致 ⇒ 整目录排除，
+#    由脚本在打包前重新投放。归档是二进制，与库侧 libnode.so 同口径「不入库」。
+# ⚠️ 为什么是 resfile 不是 rawfile：HAP 里只有 resfile 是安装后落盘的真实目录，Node 的 fs 才能
+#    打开归档与 scriptPath；rawfile 只能经 resourceManager 读（上一轮把归档放 rawfile 的实测后果：
+#    路线 ② 永远不命中、应用静默退回自检载荷）。
+entry/src/main/resources/resfile/pi-web/

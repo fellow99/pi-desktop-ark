@@ -1,16 +1,14 @@
 import { buffer } from '@kit.ArkTS';
 import { common } from '@kit.AbilityKit';
-import { resourceManager } from '@kit.LocalizationKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { CrashRecord, Logger, NodeLogEntry, NodeRuntime, NodeRuntimeOptions, NodeStartResult, NodeState } from '@fellow99/node-bridge';
 import {
   AGENT_DIR_NAME,
   APP_LOG_NAME,
-  ARCHIVE_RAWFILE,
-  ARCHIVE_SHA256_RAWFILE,
-  ARCHIVE_STAGED_NAME,
+  ARCHIVE_REL,
+  ARCHIVE_VERSION_REL,
   BRIDGE_BOOTSTRAP_FILE,
-  BRIDGE_RAWFILES,
+  BRIDGE_HOST_FILE,
   CWD_DIR_NAME,
   DEFAULT_PORT,
   DIAG_LOG_LINES,
@@ -36,7 +34,6 @@ import {
   WAIT_RUNNING_TIMEOUT_MS,
   appUrl,
   escapeJson,
-  rawfileDirFromResourceDir,
   readyMarkerPath
 } from '../common/Constants';
 import { HttpProbeResult, PortResolution, Ports } from '../common/Ports';
@@ -54,7 +51,7 @@ export enum UIState {
 export enum PayloadRoute {
   /** ① 只读直读（首选）：`resfile/pi-web/`，零解压 */
   READONLY = 'readonly',
-  /** ② `tar.gz` + Node 自解包（`rawfile/pi-web.tar.gz`） */
+  /** ② `tar.gz` + Node 自解包：`resfile/pi-web/pi-web.tar.gz`（本应用实际使用的产品路线） */
   ARCHIVE = 'tar',
   /** 骨架期自检载荷（Phase 0 回归路径）：`rawfile/selfcheck.js` */
   SELFCHECK = 'selfcheck'
@@ -111,6 +108,11 @@ export class PiDesktopRuntime {
   private launching: boolean = false;
   /** 本轮计划使用的库引导器（进诊断串；路线 ③ 显示「(未使用)」） */
   private bootstrapPlan: string = '(未判定)';
+  /**
+   * 本轮投递的时刻（epoch ms）。用途：把**跨启动累积**的 node.log 切成「本轮」——
+   * 端口回退解析绝不能读到上一轮的 `PI_WEB_READY`（真机实测缺陷，见 resolveActualPort 的注释）。
+   */
+  private launchStartedAt: number = 0;
 
   static getInstance(): PiDesktopRuntime {
     if (PiDesktopRuntime.instance === undefined) {
@@ -195,6 +197,8 @@ export class PiDesktopRuntime {
 
   private async launchInternal(context: common.UIAbilityContext, flags: string): Promise<string> {
     const runtime: NodeRuntime = NodeRuntime.getInstance();
+    // 记下本轮投递时刻（先于任何日志写入）：端口回退解析只认这之后的行（见 resolveActualPort）
+    this.launchStartedAt = Date.now();
 
     // 把库的沙箱目录先建好（payload/ + tmp/ + node-bridge/），再投递（库内部也会做一次，幂等）
     this.setStage('准备沙箱目录');
@@ -219,6 +223,14 @@ export class PiDesktopRuntime {
     this.routeDecision = plan.decision;
     this.bootstrapPlan = plan.bootstrap.length > 0 ? plan.bootstrap : '(未使用：自检路线)';
     Log.info('载荷路线 = ' + plan.route + '｜依据：' + plan.decision);
+
+    // 上一轮的**就绪 marker 必须在投递前作废**：它是「本轮真实端口」的唯一权威来源，
+    // 读到上一轮的端口会让探活打到随进程一起消失的旧端口（实测：重启后 UI 显示
+    // FAILED「connect: Failed to connect to the server @ http://127.0.0.1:40477/（端口来自 marker）」，
+    // 而本轮真实端口是 46619）。载荷会在就绪后立刻重写它，因此作废是安全且必要的。
+    if (plan.route !== PayloadRoute.SELFCHECK) {
+      this.invalidateReadyMarker(context);
+    }
 
     // 宿主能力桥：**投递之前**注册（Phase 1 传输不可用，但注册面必须先对）
     this.hostSummary = HostCapabilities.install(runtime, context);
@@ -381,34 +393,42 @@ export class PiDesktopRuntime {
       blocked += '路线 ① 不可用：context.resourceDir 为空｜';
     }
 
-    // 路线 ②：`rawfile/pi-web.tar.gz`（先物化归档**与库引导器**，再由 bootstrap 自己解包）
-    const rawfileDir: string = rawfileDirFromResourceDir(readonlyRoot);
-    const archiveRaw: string = rawfileDir + '/' + ARCHIVE_RAWFILE;
-    if (this.fileExists(archiveRaw)) {
-      const staged: string = payloadRoot + '/' + ARCHIVE_STAGED_NAME;
-      this.setStage('物化归档 + 库引导器（' + ARCHIVE_RAWFILE + ' → ' + staged + '）');
-      try {
-        this.materializeRawArchive(context, ARCHIVE_RAWFILE, staged);
-        // F4：bootstrap（+ host.js / lib/tar-extract.js）必须在**解包之前**就位 —— 解包逻辑在 bootstrap 里
-        const bootstrapStaged: string = this.materializeBridge(context, payloadRoot);
+    // 路线 ②：`resfile/pi-web/pi-web.tar.gz`（Node 侧 bootstrap 自己解包；ArkTS 只判定 + 传参）
+    // ⚠️ 判据是 **resfile 上的真实 fs 检查**（`readonlyRoot + '/pi-web/pi-web.tar.gz'`）：
+    //    HAP 里**只有 resfile 是磁盘目录**，rawfile 只能经 resourceManager 读、Node 的 fs 打不开它。
+    //    实测教训（本轮修掉的缺陷）：归档放 rawfile 时，即使 resourceManager 能探到，Node 侧也读不到，
+    //    应用只能静默退回自检路线（`node.log` 里只剩 `[selfcheck] listening …`，`payload/app.log` 缺席）。
+    //    `pi-desktop-hos` 同形：归档在 `resfile/resources/app/pi-dist.tar.gz`，主进程直接 fs 读（main.js:40-45）。
+    //    因此本路线**不做任何物化搬运**：归档与引导器本来就在磁盘上，`scriptPath` 直接指过去。
+    const archiveAbs: string = readonlyRoot.length > 0 ? readonlyRoot + '/' + ARCHIVE_REL : '';
+    if (archiveAbs.length > 0 && this.fileExists(archiveAbs)) {
+      const bootstrapAbs: string = this.findBootstrap(readonlyRoot);
+      if (bootstrapAbs.length === 0) {
+        blocked += '路线 ② 判定失败：归档在位但库引导器缺失（已查 ' + readonlyRoot + '/'
+          + READONLY_PAYLOAD_DIR + '/' + BRIDGE_BOOTSTRAP_FILE + ' 与 ' + readonlyRoot + '/'
+          + BRIDGE_BOOTSTRAP_FILE + '，都不存在）｜';
+        Log.error(blocked + '不静默降级：引导器是 scriptPath，缺它则归档不会被解包');
+      } else {
+        const declared: string = this.readArchiveSha256(readonlyRoot);
+        // host.js 与 bootstrap.js 同层（pi-web-launch.js 的关停钩子注册源）；缺席不阻断启动，
+        // 但必须在 decision 里说出来 —— 否则「关停钩子没注册」会被当成静默成功。
+        const hostAbs: string = readonlyRoot + '/' + READONLY_PAYLOAD_DIR + '/' + BRIDGE_HOST_FILE;
         plan.route = PayloadRoute.ARCHIVE;
         plan.entry = entryRel;
-        plan.scriptPath = bootstrapStaged;
-        plan.bootstrap = bootstrapStaged;
-        plan.archive = staged;
-        plan.archiveSha256 = this.readArchiveSha256(context);
-        plan.decision = blocked + 'tar.gz 路线（包内归档存在）：' + archiveRaw + ' → ' + staged
-          + '；引导器 = ' + bootstrapStaged + '（scriptPath，先解包再按 entry 解析：' + entryRel + '）'
-          + '；sha256=' + (plan.archiveSha256.length > 0
-            ? plan.archiveSha256.substring(0, 12) + '…' : '(未读到旁文件，交库自算)');
+        plan.scriptPath = bootstrapAbs;
+        plan.bootstrap = bootstrapAbs;
+        plan.archive = archiveAbs;
+        plan.archiveSha256 = declared;
+        plan.decision = blocked + 'resfile 归档命中（fs 实检）：' + archiveAbs
+          + '；引导器 = ' + bootstrapAbs + '（scriptPath，Node 侧解包到 payloadRoot 后按 entry 解析：' + entryRel + '）'
+          + '；sha256=' + (declared.length > 0 ? declared.substring(0, 12) + '…（来自 '
+            + ARCHIVE_VERSION_REL + '）' : '(未读到 ' + ARCHIVE_VERSION_REL + '，交库按实算值处理)')
+          + '；host.js=' + (this.fileExists(hostAbs) ? '在位（关停钩子注册源）' : '缺席（载荷会 warn 并跳过关停钩子）');
         return plan;
-      } catch (e) {
-        this.setStage('归档/引导器物化失败，试下一条路线');
-        Log.error('路线 ② 物化失败（' + archiveRaw + ' → ' + staged + '）：' + Ports.describe(e));
-        blocked += '路线 ② 判定失败：物化异常（' + Ports.describe(e) + '）｜';
       }
     } else {
-      blocked += '路线 ② 未命中：包内归档不存在（' + archiveRaw + '）｜';
+      blocked += '路线 ② 未命中：resfile 里没有归档（fs 实检 ' + (archiveAbs.length > 0 ? archiveAbs : '(resourceDir 为空)')
+        + ' 不存在）｜';
     }
 
     // Phase 0 回归路径：自检载荷（物化 rawfile，保持原行为不变）
@@ -455,11 +475,16 @@ export class PiDesktopRuntime {
         }
       }
       // ② 日志（库通道；载荷的 app.log 由诊断面板读，这里用库的 logs() 拿同一批 stdout）
-      const entriesText: string = this.logsToText(runtime, 200);
+      // ⚠️ **必须只认本轮的行**：库的 `logs()` 读的是 node.log 尾部，而该文件跨启动累积 ——
+      //    重启时会读到上一轮的 `PI_WEB_READY {"port":46619…}` 并拿它去探活（真机实测缺陷：
+      //    `FAILED: 探活失败：connect: … :46619（端口来自 log:PI_WEB_READY）`，本轮实际端口 44031）。
+      //    因此按本轮投递时刻 `launchStartedAt` 过滤；`at=0` 的行（库未能解析出时间戳）保留，不小看它。
+      const entriesText: string = this.logsToTextSince(runtime, 200, this.launchStartedAt);
       const fromLog: number = Ports.parsePortFromLog(entriesText);
       if (fromLog > 0) {
         lastLogEvidence = Ports.evidenceLine(entriesText);
-        return new PortResolution(fromLog, 'log:PI_WEB_READY', '第 ' + attempts + ' 次读取命中：' + lastLogEvidence);
+        return new PortResolution(fromLog, 'log:PI_WEB_READY', '第 ' + attempts + ' 次读取命中（仅本轮日志）：'
+          + lastLogEvidence);
       }
       if (attempts % 10 === 1) {
         Log.info('等端口：第 ' + attempts + ' 次尝试（marker 未命中，日志里也还没有 PI_WEB_READY）');
@@ -600,12 +625,28 @@ export class PiDesktopRuntime {
 
   // ── 内部工具 ────────────────────────────────────────────────────────────────
 
-  private logsToText(runtime: NodeRuntime, count: number): string {
+  /**
+   * 只取**本轮**的库日志文本（`entry.at >= sinceMs` 或时间戳不可解析的行）。
+   *
+   * 为什么需要它：库的 `logs()` 读的是 `node.log` 尾部，而该文件跨启动累积。解析端口时读到
+   * 上一轮的 `PI_WEB_READY` 会让探活打到旧端口（真机实测：重启后 `FAILED … :46619`，本轮实际 44031）。
+   * `at === 0` 表示库没能解析出该行时间戳 —— 无法证明它属于上一轮，因此**保留**（宁可不命中，也不错杀）。
+   */
+  private logsToTextSince(runtime: NodeRuntime, count: number, sinceMs: number): string {
     try {
       const entries: NodeLogEntry[] = runtime.logs(count);
       let out: string = '';
+      let skipped: number = 0;
       for (let i = 0; i < entries.length; i++) {
-        out += entries[i].text + '\n';
+        const entry: NodeLogEntry = entries[i];
+        if (sinceMs > 0 && entry.at > 0 && entry.at < sinceMs) {
+          skipped++;
+          continue;
+        }
+        out += entry.text + '\n';
+      }
+      if (skipped > 0) {
+        Log.info('端口解析已排除上一轮日志行 ' + skipped + ' 条（at < launchStartedAt=' + sinceMs + '）');
       }
       return out;
     } catch (e) {
@@ -655,11 +696,64 @@ export class PiDesktopRuntime {
     }
   }
 
+  /**
+   * 作废上一轮的就绪 marker（`<filesDir>/payload/pi-web.ready.json`）。
+   *
+   * 为什么必须做（真机实测缺陷）：marker 是「本轮真实端口」的唯一权威来源，而它由**载荷**在就绪
+   * 之后才写。重启时若不先删，ArkTS 会在新服务就绪前读到上一轮的端口并立刻探活 ⇒
+   * `FAILED: 探活失败：connect: Failed to connect to the server @ http://127.0.0.1:40477/（端口来自 marker）`，
+   * 而本轮服务实际监听 46619（同一台设备连续两次启动的实测端口）。作废后由标记轮询自然等到新端口。
+   * 失败只 warn、不阻断启动（最坏情况退回「日志解析端口」的退化路径）。
+   */
+  private invalidateReadyMarker(context: common.UIAbilityContext): void {
+    const marker: string = readyMarkerPath(context.filesDir);
+    if (!this.fileExists(marker)) {
+      Log.info('就绪 marker 不存在（首启或已作废）：' + marker);
+      return;
+    }
+    try {
+      fs.unlinkSync(marker);
+      Log.info('已作废上一轮就绪 marker（避免读回旧端口）：' + marker);
+    } catch (e) {
+      Log.warn('作废就绪 marker 失败（继续启动，可能读回旧端口）：' + marker + '｜' + Ports.describe(e));
+    }
+  }
+
   private fileExists(path: string): boolean {
     try {
       return fs.accessSync(path);
     } catch (e) {
       return false;
+    }
+  }
+
+  /**
+   * 读一个**小文本文件**（≤ 64 KiB；`pi-web.version` 这类版本/状态文件）。
+   *
+   * 为什么手写而不用 `fs.readTextSync`：本类的读文件路径与库的 `Logger.tail` / `Ports.readMarker`
+   * 保持同一形态（stat → open → read → `buffer.from(...).toString('utf-8')`），中文不会乱码，
+   * 失败一律**返回空串并 warn**（调用方据空串走退化路径，不猜）。
+   */
+  private readSmallText(path: string): string {
+    try {
+      const stat: fs.Stat = fs.statSync(path);
+      const size: number = stat.size;
+      if (size <= 0 || size > 65536) {
+        Log.warn('文件大小异常（' + size + ' B），按不可读处理：' + path);
+        return '';
+      }
+      const file: fs.File = fs.openSync(path, fs.OpenMode.READ_ONLY);
+      try {
+        const ab: ArrayBuffer = new ArrayBuffer(size);
+        const read: number = fs.readSync(file.fd, ab);
+        const buf: buffer.Buffer = buffer.from(ab, 0, read);
+        return buf.toString('utf-8');
+      } finally {
+        fs.closeSync(file);
+      }
+    } catch (e) {
+      Log.warn('读文件失败（按不可读处理）：' + path + '｜' + Ports.describe(e));
+      return '';
     }
   }
 
@@ -691,31 +785,6 @@ export class PiDesktopRuntime {
     return '';
   }
 
-  /**
-   * 物化库自带 Node 侧载荷三件（F4）：`bootstrap.js` + 同级 `host.js` + `lib/tar-extract.js`。
-   *
-   * 为什么必须做：库的 `payload/` **不在 HAR 里**（已知打包缺口），而 `bootstrap.js` 是交给库的
-   * `scriptPath` —— 没有它 `node::Start` 跑的不是引导器 ⇒ 归档不会被解包、没有 uncaughtException
-   * 兜底、也没有独立日志通道。失败**不吞**：抛给调用方，由路线判定把原因带进 decision（C2）。
-   */
-  private materializeBridge(context: common.UIAbilityContext, payloadRoot: string): string {
-    this.ensureDir(payloadRoot);
-    this.ensureDir(payloadRoot + '/lib');
-    let bootstrap: string = '';
-    for (let i = 0; i < BRIDGE_RAWFILES.length; i++) {
-      const rawName: string = BRIDGE_RAWFILES[i];
-      const dest: string = payloadRoot + '/' + rawName;
-      this.materializeRawfile(context, rawName, dest);
-      if (rawName === BRIDGE_BOOTSTRAP_FILE) {
-        bootstrap = dest;
-      }
-    }
-    if (bootstrap.length === 0 || !this.fileExists(bootstrap)) {
-      throw new Error('库引导器未物化成功：' + payloadRoot + '/' + BRIDGE_BOOTSTRAP_FILE);
-    }
-    return bootstrap;
-  }
-
   /** `rawfile` → 沙箱（小文件；自检载荷走这里，与库的 `Env.materializeRawfile` 同语义） */
   private materializeRawfile(context: common.UIAbilityContext, rawName: string, destPath: string): string {
     const data: Uint8Array = context.resourceManager.getRawFileContentSync(rawName);
@@ -731,64 +800,25 @@ export class PiDesktopRuntime {
   }
 
   /**
-   * 归档 rawfile → 沙箱（**分块搬运**）。
+   * 读归档的 SHA-256 版本文件 `<resfile>/pi-web/pi-web.version`（幂等键的唯一来源）。
    *
-   * 为什么不能用 `Env.materializeRawfile`：它把整个 rawfile 一次读进内存
-   * （`getRawFileContentSync`），150 MB 的归档会直接把应用内存顶穿。
-   * 这里走 `getRawFdSync` + 4 MiB 分块 read/write：内存占用恒定，且**只做字节搬运** ——
-   * 解包由 Node 自己做（谁写谁读，库契约 C3）。
+   * 形状镜像 `pi-desktop-hos/pi-dist.version`：纯文本、首行 64 位 hex。读不到 ⇒ 返回空串，
+   * 由库的 bootstrap 按「实算值」处理（它会把实算 sha256 写进 marker，只是每次都要重算一遍）。
+   * 做**首行 64 位 hex 校验**：版本文件被编辑器加了 BOM/换行/说明时，宁可退回实算也不要传错键。
    */
-  private materializeRawArchive(context: common.UIAbilityContext, rawName: string, destPath: string): void {
-    const chunkBytes: number = 4 * 1024 * 1024;
-    const descriptor: resourceManager.RawFileDescriptor = context.resourceManager.getRawFdSync(rawName);
-    const out: fs.File = fs.openSync(destPath,
-      fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
-    try {
-      let written: number = 0;
-      const total: number = descriptor.length;
-      while (written < total) {
-        const size: number = Math.min(chunkBytes, total - written);
-        const buffer: ArrayBuffer = new ArrayBuffer(size);
-        const read: number = fs.readSync(descriptor.fd, buffer, {
-          offset: descriptor.offset + written,
-          length: size
-        });
-        if (read <= 0) {
-          break;
-        }
-        fs.writeSync(out.fd, buffer, { offset: written, length: read });
-        written += read;
-      }
-      Log.info('归档已物化：' + destPath + '（' + written + ' / ' + total + ' B；由 Node 自己解包）');
-      if (written !== total) {
-        // 不静默：搬运不完整必须说出来（Node 侧的解包/校验会再报一次）
-        throw new Error('归档搬运不完整：写入 ' + written + ' B，声明 ' + total + ' B');
-      }
-    } finally {
-      fs.closeSync(out);
-      try {
-        context.resourceManager.closeRawFdSync(rawName);
-      } catch (e) {
-        Log.warn('closeRawFdSync 失败（不影响已写入的数据）：' + Ports.describe(e));
-      }
-    }
-  }
-
-  /** 读 `<rawfile>/pi-web.tar.gz.sha256` 的首个 64 位 hex（幂等键；读不到就留空由库自算） */
-  private readArchiveSha256(context: common.UIAbilityContext): string {
-    try {
-      const data: Uint8Array = context.resourceManager.getRawFileContentSync(ARCHIVE_SHA256_RAWFILE);
-      const text: string = this.utf8(data);
-      const firstLine: string = text.split('\n')[0].trim().toLowerCase();
-      if (this.isSha256(firstLine)) {
-        return firstLine;
-      }
-      Log.warn('归档 sha256 旁文件首行不是 64 位 hex（忽略，交给库自算）：' + firstLine.substring(0, 80));
-      return '';
-    } catch (e) {
-      Log.warn('未读到归档 sha256 旁文件（' + ARCHIVE_SHA256_RAWFILE + '）：交给库计算一次并落盘记下');
+  private readArchiveSha256(readonlyRoot: string): string {
+    const versionPath: string = readonlyRoot + '/' + ARCHIVE_VERSION_REL;
+    const text: string = this.readSmallText(versionPath);
+    if (text.length === 0) {
+      Log.warn('未读到归档版本文件（' + versionPath + '）：交给库按实算 sha256 处理');
       return '';
     }
+    const firstLine: string = text.split('\n')[0].trim().toLowerCase();
+    if (this.isSha256(firstLine)) {
+      return firstLine;
+    }
+    Log.warn('归档版本文件首行不是 64 位 hex（忽略，交给库实算）：' + firstLine.substring(0, 80));
+    return '';
   }
 
   private isSha256(text: string): boolean {
@@ -804,15 +834,5 @@ export class PiDesktopRuntime {
       }
     }
     return true;
-  }
-
-  private utf8(data: Uint8Array): string {
-    try {
-      const buf: buffer.Buffer = buffer.from(data.buffer as ArrayBuffer, data.byteOffset, data.byteLength);
-      return buf.toString('utf-8');
-    } catch (e) {
-      Log.error('rawfile 解码失败：' + Ports.describe(e));
-      return '';
-    }
   }
 }
