@@ -1,0 +1,199 @@
+diff --git a/app/api/agent/new/route.ts b/app/api/agent/new/route.ts
+index 0a9184a..2562b50 100644
+--- a/app/api/agent/new/route.ts
++++ b/app/api/agent/new/route.ts
+@@ -3,6 +3,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+ import { existsSync } from "fs";
+ import { randomUUID } from "crypto";
+ import { allowFileRoot } from "@/lib/file-access";
++import { describePathForms, normalizeHosSandboxPath } from "@/lib/hos-sandbox-path";
+ import { invalidateSessionListCache } from "@/lib/session-reader";
+ import { startRpcSession } from "@/lib/rpc-manager";
+ 
+@@ -24,10 +25,14 @@ export async function POST(req: Request) {
+   let promptAccepted = false;
+   try {
+     const body = await req.json() as { cwd?: string; [key: string]: unknown };
+-    const { cwd, ...command } = body;
++    const { cwd: rawCwd, ...command } = body;
++    // 沙箱路径的 hdc 写法（/data/app/el2/<uid>/…）换成 el2 别名（幂等，见 lib/hos-sandbox-path.ts）；
++    // 后面的存在性判定、会话目录、文件根缓存都只认这一个值。
++    const requestedCwd: string = typeof rawCwd === "string" ? rawCwd : "";
++    const cwd: string = normalizeHosSandboxPath(requestedCwd);
+     commandType = typeof command.type === "string" ? command.type : undefined;
+ 
+-    if (!cwd || typeof cwd !== "string") {
++    if (cwd.length === 0) {
+       return NextResponse.json({
+         error: "cwd is required",
+         ...(commandType === "prompt"
+@@ -38,6 +43,7 @@ export async function POST(req: Request) {
+     if (!existsSync(cwd)) {
+       return NextResponse.json({
+         error: `Directory does not exist: ${cwd}`,
++        hint: describePathForms(requestedCwd, cwd),
+         ...(commandType === "prompt"
+           ? { code: "prompt_rejected", accepted: false }
+           : {}),
+diff --git a/app/api/cwd/browse/route.ts b/app/api/cwd/browse/route.ts
+index 972cbe2..381c14a 100644
+--- a/app/api/cwd/browse/route.ts
++++ b/app/api/cwd/browse/route.ts
+@@ -1,6 +1,7 @@
+ import { NextRequest, NextResponse } from "next/server";
+ import { stat } from "fs/promises";
+ import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
++import { describePathForms, normalizeHosSandboxPath } from "@/lib/hos-sandbox-path";
+ import {
+   createDirectory,
+   findWorkspaceRoot,
+@@ -61,7 +62,7 @@ export async function GET(request: NextRequest) {
+     if (requestedRoot) {
+       return await browseDeclaredRoot(requestedRoot);
+     }
+-    const requested = request.nextUrl.searchParams.get("path")?.trim();
++    const requested = normalizeHosSandboxPath(request.nextUrl.searchParams.get("path")?.trim() ?? "");
+ 
+     if (shouldShowWindowsDrivePicker(requested)) {
+       return NextResponse.json({
+@@ -78,7 +79,10 @@ export async function GET(request: NextRequest) {
+     try {
+       resolved = await resolveDirectory(candidate);
+     } catch {
+-      return NextResponse.json({ error: "Directory does not exist" }, { status: 404 });
++      return NextResponse.json(
++        { error: "Directory does not exist", hint: describePathForms(requested, candidate) },
++        { status: 404 },
++      );
+     }
+ 
+     const directoryStat = await stat(resolved);
+@@ -110,7 +114,9 @@ export async function POST(request: Request) {
+ 
+   try {
+     const body = await request.json() as { path?: unknown; name?: unknown };
+-    const parentPath = typeof body.path === "string" ? body.path.trim() : "";
++    const declaredParent = typeof body.path === "string" ? body.path.trim() : "";
++    // 建目录的父路径同样接受 hdc 写法（幂等改写；见 lib/hos-sandbox-path.ts）。
++    const parentPath = normalizeHosSandboxPath(declaredParent);
+     const name = typeof body.name === "string" ? body.name.trim() : "";
+ 
+     if (!parentPath) {
+diff --git a/app/api/cwd/validate/route.ts b/app/api/cwd/validate/route.ts
+index 5d514f5..79c7d5a 100644
+--- a/app/api/cwd/validate/route.ts
++++ b/app/api/cwd/validate/route.ts
+@@ -3,6 +3,7 @@ import { statSync, type Stats } from "fs";
+ import { homedir } from "os";
+ import { isAbsolute, resolve } from "path";
+ import { allowFileRoot } from "@/lib/file-access";
++import { describePathForms, normalizeHosSandboxPath } from "@/lib/hos-sandbox-path";
+ import { projectIdentityKey } from "@/lib/project-identity";
+ import { resolveProject } from "@/lib/worktree";
+ 
+@@ -17,22 +18,30 @@ function normalizeCwd(cwd: string): string {
+ export async function POST(req: Request) {
+   try {
+     const body = await req.json() as { cwd?: unknown };
+-    const cwd = typeof body.cwd === "string" ? body.cwd.trim() : "";
++    const requested = typeof body.cwd === "string" ? body.cwd.trim() : "";
+ 
+-    if (!cwd) {
++    if (!requested) {
+       return NextResponse.json({ error: "Path is required" }, { status: 400 });
+     }
+ 
++    // 沙箱路径的 hdc 写法（/data/app/el2/<uid>/…）先换成 el2 别名再落盘判定（幂等）。
++    const cwd = normalizeHosSandboxPath(requested);
+     const normalizedCwd = normalizeCwd(cwd);
+     let stat: Stats;
+     try {
+       stat = statSync(normalizedCwd);
+     } catch {
+-      return NextResponse.json({ error: `Directory does not exist: ${cwd}` }, { status: 400 });
++      return NextResponse.json(
++        { error: `Directory does not exist: ${cwd}`, hint: describePathForms(requested, cwd) },
++        { status: 400 },
++      );
+     }
+ 
+     if (!stat.isDirectory()) {
+-      return NextResponse.json({ error: `Path is not a directory: ${cwd}` }, { status: 400 });
++      return NextResponse.json(
++        { error: `Path is not a directory: ${cwd}`, hint: describePathForms(requested, cwd) },
++        { status: 400 },
++      );
+     }
+ 
+     allowFileRoot(normalizedCwd);
+diff --git a/lib/hos-sandbox-path.ts b/lib/hos-sandbox-path.ts
+new file mode 100644
+index 0000000..ed2bf4b
+--- /dev/null
++++ b/lib/hos-sandbox-path.ts
+@@ -0,0 +1,65 @@
++/**
++ * pi-desktop（宿主应用）沙箱路径的**两种写法**，指向同一个目录：
++ *
++ *   ① el2 别名（应用自己的 API 只认这个，也是 `context.filesDir` 的形态）
++ *        `/data/storage/el2/base/haps/<module>/files[/…]`
++ *   ② `hdc shell` 视角（开发者在设备上 `ls` 到的是这个）
++ *        `/data/app/el2/<uid>/base/<bundle>/haps/<module>/files[/…]`
++ *
++ * ②->① 的映射**以 HOME 为锚**：HOME 是宿主注入的应用沙箱根（ArkTS 侧
++ * `context.filesDir`），它本身就是 ① 的形态。因此本模块不硬编码任何 bundle/uid：
++ * 只要 HOME 形如 ①，就把 ② 的 `<前缀>/haps/<module>/files` 换成 HOME。
++ *
++ * 三条性质（本补丁的验收口径）：
++ *   · **幂等**：① 形态不再匹配 ②，重复调用逐字节不变；
++ *   · **可逆**：只重写请求里的路径，不写盘、不缓存 —— 响应回显的是 ① 形态，
++ *     与 ② 是同一个真实目录，调用方可原样拿回自己给的 ② 继续用；
++ *   · **不猜测**：HOME 不是 ① 的形态（非鸿蒙 / 沙箱被重定向）时**原样返回**。
++ *
++ * 为什么需要它：真机上 ② 形态以前一律 400 `Directory does not exist`（路由把路径
++ * 直接交给 `statSync`/`existsSync`，而 ② 只是 hdc 的视图）。把「用户手打的合法写法」
++ * 报成「目录不存在」会让人怀疑工作区没建，排查方向从一开始就是错的。
++ */
++
++import { homedir } from "os";
++
++/** ① el2 别名形态（HOME 必须正好是这个形态，才谈得上映射）。 */
++const EL2_ALIAS_HOME = /^\/data\/storage\/el2\/base\/haps\/([^/]+)\/files\/?$/;
++
++/** 编译产物里的稳定标记（`assemble-payload.mjs` 用它断言补丁真的进了载荷）。 */
++export const HOS_PATH_ALIAS_MARKER = "pi-hos-sandbox-alias";
++
++function escapeRegExp(text: string): string {
++  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++}
++
++/**
++ * 把 `hdc shell` 视角的沙箱路径改写为 el2 别名。
++ *
++ * @param input 调用方给的路径（可能是 ①、②、`~/…` 或普通路径）
++ * @param home 应用沙箱根（默认 `homedir()`；单测可显式传入）
++ * @returns 改写后的路径；不需要/不能改写时返回**原值**（同一性由调用方可判断）
++ */
++export function normalizeHosSandboxPath(input: string, home: string = homedir()): string {
++  if (!input) return input;
++  const aliasHome = home.replace(/\/+$/, "");
++  const match = EL2_ALIAS_HOME.exec(aliasHome);
++  if (!match) return input;
++  const hdcPrefix = new RegExp(
++    `^/data/app/el2/\\d+/base/[^/]+/haps/${escapeRegExp(match[1])}/files(?=/|$)`,
++  );
++  const rest = input.replace(hdcPrefix, "");
++  if (rest === input) return input;
++  return `${aliasHome}${rest}`;
++}
++
++/**
++ * 给「路径仍然不存在」的 400 加一句**可诊断**的提示：期望形态、收到的形态、
++ * 以及是否做过改写。纯信息，不参与判定。
++ */
++export function describePathForms(received: string, normalized: string): string {
++  const forms = [`received=${received}`, `expected=${normalized}`];
++  if (normalized !== received) forms.push("normalized=el2-alias");
++  forms.push(HOS_PATH_ALIAS_MARKER);
++  return forms.join(" ");
++}

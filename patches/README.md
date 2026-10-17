@@ -29,6 +29,37 @@
 | 回退方式 | `git -C ../pi-web apply --reverse patches/v0.12.1/0001-terminal-capability-unsupported.patch` |
 | 规格 | `pi-desktop-ark/logs/20261016-1/DEV_CHECKLIST.md` §R5、`pi-desktop-hos/docs/鸿蒙环境能力清单-v0.11.1.md` §REV-2 |
 
+### `CWD-1` — 目录选择器的「沙箱」入口取宿主声明的根（`PI_HOS_ROOTS`），不再按父级猜
+
+| 项 | 内容 |
+|---|---|
+| 文件 | `patches/v0.12.1/0002-cwd-sandbox-root-from-hos-roots.patch`（6,089 B；sha256 `2e37b2ed3fbc5260ac5f0f6f5c033e1447cf119771a1ccb83d246cc88e9cf9a4`；UTF-8） |
+| 全局编号 | `CWD-1`（只增不改、不复用；缺陷修复补丁，不挂编号需求） |
+| 被 patch 的上游 | `pi-web` tag **`v0.12.1`**（`f83b1a5`） |
+| 触及文件（2） | `lib/directory-browser.ts`（新增 `getWorkspaceRoots()`/`findWorkspaceRoot()`；`getBrowseStartDirectory()` 裸打开时用宿主声明的 `sandbox` 根）、`app/api/cwd/browse/route.ts`（新增 `?root=<id>`，未知 id → 400、已声明但不存在 → 404 带 `rootId`/`rootPath`） |
+| **触发条件** | 工作区根的**唯一事实源**是宿主应用（ArkTS 侧 `context.filesDir`），上游只认 `homedir()`：选择器只能从沙箱**父级**一层层点进 `workspace`。任何「按父级再拼一个 `workspace`」的写法都会拼出 `…/el2/base/files/workspace`（少了 `haps/<module>`），真机 `GET /api/cwd/browse?path=…` → **404**，用户只能手打绝对路径。 |
+| **实施时机** | 本轮缺陷修复（2026-10-17）：由 `scripts/assemble-payload.mjs` 在载荷组装期幂等应用（见 §1）。 |
+| **替代方案** | ① 让宿主改 `homedir`：`homedir()` 是库注入的 `HOME`，改它会把 `pi-agent`/`pi-cwd` 等所有派生路径一起挪走（已否决）；② 在 ArkWeb 侧注入 JS 覆盖选择器起点：绕过 API 且随页面重构即碎（已否决）；③ 只报 400 + 提示：用户仍无法一键到达沙箱根（已否决）。 |
+| 语义 | `root` 缺失且无 `path` 时：宿主声明的 `sandbox` 根**存在**就落在它上面，不存在退回 `homedir()`（不让选择器停在死目录）；响应新增 `rootId`/`rootPath`，与原状字段并存（向后兼容）。 |
+| 生成方式 | `git -C ../pi-web worktree add --detach <scratch>/piweb-patch2 v0.12.1` → 改 → `git diff`（生成后 `worktree remove --force`，`../pi-web` 工作树零改动） |
+| 回退方式 | `git -C ../pi-web apply --reverse patches/v0.12.1/0002-cwd-sandbox-root-from-hos-roots.patch` |
+| 规格 | `specs/104-host-capabilities-arkts-impl/spec.md` FR-104-026、`docs/已知坑-cwd与沙箱路径.md` |
+
+### `CWD-2` — `hdc shell` 视角的沙箱路径（`/data/app/el2/…`）改写为 el2 别名后再判定
+
+| 项 | 内容 |
+|---|---|
+| 文件 | `patches/v0.12.1/0003-cwd-hdc-path-alias-normalize.patch`（9,177 B；sha256 `e4cc65c09583298a3dd9f0e1e7fffc42fcdd391e5ac2a42ebe1aec9a30d1acce`；UTF-8） |
+| 全局编号 | `CWD-2`（只增不改、不复用；缺陷修复补丁） |
+| 被 patch 的上游 | `pi-web` tag **`v0.12.1`**（`f83b1a5`） |
+| 触及文件（4） | `lib/hos-sandbox-path.ts`（**新增**：`normalizeHosSandboxPath()` / `describePathForms()`）、`app/api/cwd/validate/route.ts`、`app/api/cwd/browse/route.ts`、`app/api/agent/new/route.ts`（三条 cwd 路由在判定前归一） |
+| **触发条件** | 同一个沙箱目录有两种写法：应用认 el2 别名 `/data/storage/el2/base/haps/<module>/files/…`，而开发者在 `hdc shell` 里看到的是 `/data/app/el2/<uid>/base/<bundle>/haps/<module>/files/…`。后者以前一律 **400** `Directory does not exist`（路由把路径直接交给 `statSync`/`existsSync`），把「合法路径」报成「目录不存在」，排查方向从一开始就错。 |
+| **实施时机** | 本轮缺陷修复（2026-10-17），与 `CWD-1` 同批应用（`0003` 上下文按 `0002` 之后生成）。 |
+| **替代方案** | ① 只在 400 里加提示、不归一：用户仍要手改路径（已否决；本轮取归一，提示同时保留）；② 在宿主侧改写请求体：宿主不在 HTTP 链路上（已否决）；③ 硬编码 uid/bundle：设备/安装形态一变就失效（已否决）。 |
+| 语义 | 以 `HOME`（= `context.filesDir`）为锚做**纯字符串重写**：幂等（el2 形态不再匹配）、可逆（不写盘、不缓存，响应回显 el2 形态）、不猜测（`HOME` 不是 el2 形态则原样返回）。400 仍在，并带 `hint`（`received=… expected=… normalized=el2-alias`）。 |
+| 生成方式 / 回退方式 | 同上（`--reverse patches/v0.12.1/0003-cwd-hdc-path-alias-normalize.patch`） |
+| 规格 | `docs/已知坑-cwd与沙箱路径.md` §2 |
+
 ## 1. 构建脚本如何消费本目录（已实现，2026-10-17）
 
 `scripts/assemble-payload.mjs` 在 `--apply` 时、**打包 tar.gz 之前**执行「上游补丁阶段」：
