@@ -5,7 +5,7 @@
 #（版本与 SHA-256 固化在 ohos-node-bridge/runtime.lock.json，投放前跑七项 ELF 门禁，任一不过硬失败）。
 #
 # 用法：
-#   ./scripts/provision-runtime.sh                 # 用本地运行时目录（<父工程>/ohos-node-runtime）
+#   ./scripts/provision-runtime.sh                 # 用库仓库内运行时目录（../ohos-node-bridge/runtime）
 #   OHOS_NODE_RUNTIME_DIR=<dir> ./scripts/provision-runtime.sh
 #   ./scripts/provision-runtime.sh --check         # 只校验，不投放
 #   ./scripts/provision-runtime.sh --download      # 本地没有时联网取（国内需代理，见下）

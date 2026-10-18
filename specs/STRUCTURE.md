@@ -175,7 +175,7 @@ pi-desktop-ark/
 | `build-profile.json5` 的 `signingConfigs` 内容 | 同上（文件本身入库，材料属本地未提交改动） | DevEco「自动生成签名」 | 同上 |
 | `**/build/`、`**/.hvigor/`、`**/.cxx/`、`**/.preview/`、`oh_modules/`、`*.hap` | 构建产物与依赖缓存 | hvigor / ohpm | 无影响（可重建） |
 | `/.idea/`、`*.iml` | 编辑器状态 | DevEco | 无影响 |
-| （父工程）`/ohos-node-runtime`、`/_test` | 运行时缓存与探针工程 | 库侧 tooling | `provision --download` 需联网（国内要 `NODE_USE_ENV_PROXY=1`） |
+| （库仓库内，非本仓库）`../ohos-node-bridge/runtime/`（仅 `*.so` 不入库）、（父工程）`/_test` | 运行时缓存与探针工程 | 库侧 tooling | 缺产物时 `provision --download` 联网取（国内要 `NODE_USE_ENV_PROXY=1`）；2026-10-18 前缓存在父工程 `/ohos-node-runtime` |
 
 > ⚠️ **当前工作区状态**：`entry/libs/arm64-v8a/`、`libs/@fellow99/node-bridge.har`、`entry/build/**` **已存在于本机**（构建过），但它们都不在 git 索引里 —— 这是**正确状态**，不要顺手 `git add`。
 
@@ -204,7 +204,7 @@ pi-desktop-ark/
 | `../pi-web` | **上游（UI + Next 服务端）** | 载荷内容与 `/api/*`、SSE、鉴权源码事实（规划 §6.1） | 主界面无内容 |
 | `../pi-desktop-hos` | **资产来源与对标基线**（一次性退役） | 环境装配、进程内 Next 宿主、三个同名扩展、预置模板、工作区补丁、全部失败经验（规划 §8.3） | 需重新踩坑（不阻塞构建） |
 | `../harmonypc-electron` | **被推翻的对象** | 无（仅历史对照：`libelectron.so` 181 MB / HAP 320.3 MB 的合规与体积教训） | — |
-| `../pi-workspace`（父容器） | 容器仓库 | submodule 布局；`../ohos-node-runtime` 是运行时缓存目录（不入库） | 脚本中的相对默认路径失效（可用 `BRIDGE=`/`OHOS_NODE_RUNTIME_DIR=` 覆盖） |
+| `../pi-workspace`（父容器） | 容器仓库 | submodule 布局；运行时缓存 2026-10-18 起在 `../ohos-node-bridge/runtime/`（仅 `*.so` 不入库），此前为父容器同级 `../ohos-node-runtime/` | 脚本中的相对默认路径失效（可用 `BRIDGE=`/`OHOS_NODE_RUNTIME_DIR=` 覆盖） |
 
 > 本工程是 `pi-workspace` 的 **submodule**，构建脚本按 `../` 解析兄弟目录（库规划 §7.1）⇒ **不要**把本工程单独拷出仓库根外构建。
 
