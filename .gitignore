@@ -36,6 +36,8 @@ libs/**/*.har
 #    路线 ② 永远不命中、应用静默退回自检载荷）。
 entry/src/main/resources/resfile/pi-web/
 
-# ── 真机证据（**本地留存，不入库**）──
-# 含截图/大型 JSON 与环境细节；按需求确认不提交内容。需要时本地查看或用附件传递。
-docs/evidence/
+# 本地签名材料目录（.p12/.cer/.p7b/.csr + material 解密密钥链，绝不入库）
+/.ohos/
+
+# 阶段日志与证据（构建日志、截图、报告）— 入库策略同 desktop，不入库
+/logs/
