@@ -1,11 +1,14 @@
-# Pi Desktop V2（`pi-desktop-ark`）
+# Pi Desktop · HarmonyOS Edition（`pi-desktop-ark`）
 
-> HarmonyOS 版 Pi Desktop：**进程内 Node.js 运行时**（`@fellow99/node-bridge`）+ 端上 `pi-web` 服务
-> + **ArkWeb** 渲染前端。**不带任何 Chromium/Electron**。功能对标 `pi-desktop-hos`。
+> **定位：HarmonyOS Edition**（HarmonyOS 版）—— Pi Desktop 的两个鸿蒙版别之一；另一个是 `pi-desktop-hos`
+> （**Electron on HarmonyOS Edition**，Electron-on-鸿蒙运行时）。本版**不带任何 Chromium/Electron**：
+> **进程内 Node.js 运行时**（`@fellow99/node-bridge`）+ 端上 `pi-web` 服务 + **ArkWeb** 渲染前端；
+> 功能目标是与 Electron on HarmonyOS 版对齐。
 
 | 项 | 值 |
 | --- | --- |
-| 应用名 / 包名 | Pi Desktop V2 / `org.fellow99.pi.PiDesktopArk` |
+| 版别 | **HarmonyOS Edition**（`pi-desktop-ark`） |
+| 应用名（桌面/窗口标签）/ 包名 | Pi Desktop V2 / `org.fellow99.pi.PiDesktopArk` |
 | 目标设备 | `2in1` / `tablet`（不做 phone） |
 | 后端 | `@fellow99/node-bridge` 起的 Node v24.2.0（进程内，`dlopen` + `node::Start`） |
 | 前端 | ArkWeb 加载 `http://127.0.0.1:<port>/`（页面由本地服务渲染，同源零 CORS） |
