@@ -98,6 +98,7 @@ export function rethrowOsPermission(err, root) {
 
 /** 同步 stat 辅助（判定目录是否为 git 仓库：存在 .git）。 */
 export function hasGitDir(root) {
-  try { return fs.statSync(path.join(root, '.git')).isDirectory(); }
+  // .git 可能是目录（普通仓库）或文件（worktree/submodule 指针），两者都算 git 仓库
+  try { return !!fs.statSync(path.join(root, '.git')); }
   catch { return false; }
 }

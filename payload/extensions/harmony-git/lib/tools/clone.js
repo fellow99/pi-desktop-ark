@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import * as fsp from 'node:fs/promises';
-import { gitRuntime, netFor, rethrowNet } from './ctx.js';
+import { gitRuntime, netFor, rethrowNet, assertNoUserinfo, isAbortError, abortResult } from './ctx.js';
 // 目录存在性检查用原生 fs（目标在仓库外，chroot 适配器不适用）
 
 export default {
@@ -26,6 +26,7 @@ export default {
       if (!url || !/^https?:\/\//i.test(url)) {
         return { content: [{ type: 'text', text: '仅支持 http/https 克隆地址（SSH 地址请改用 https 形式）。' }], isError: true };
       }
+      try { assertNoUserinfo(url); } catch (e) { return { content: [{ type: 'text', text: e.message }], isError: true }; }
       const base = (ctx && ctx.cwd) || process.cwd();
       let dir = params.dir;
       if (!dir) {
@@ -57,10 +58,13 @@ export default {
       try {
         await git.clone({
           fs: net.fs, http: net.http, dir: abs, url,
-          ref: params.ref, depth: params.depth, singleBranch: true,
+          ref: params.ref, depth: params.depth, singleBranch: true, signal: _signal,
           ...net.auth,
         });
       } catch (e) {
+        if (isAbortError(e, _signal)) { await fsp.rm(abs, { recursive: true, force: true }).catch(() => {}); return abortResult('git_clone'); }
+        // 失败不留半成品目录（否则重试必撞「已存在且非空」）
+        await fsp.rm(abs, { recursive: true, force: true }).catch(() => {});
         rethrowNet(e, url);
       }
       let head = null;

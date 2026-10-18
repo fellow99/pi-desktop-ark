@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot, assertIsRepo } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, assertIsRepo, mapOsError } from './ctx.js';
 import { renderStatus } from '../report.js';
 
 export default {
@@ -29,6 +29,7 @@ export default {
       const text = renderStatus(matrix, branchLine) + (hint ? '\n' + hint : '');
       return { content: [{ type: 'text', text }], details: { branchLine, ...{} } };
     } catch (e) {
+      mapOsError(e, root);
       return { content: [{ type: 'text', text: `git_status 失败：${e.message}` }], details: {}, isError: true };
     }
   },

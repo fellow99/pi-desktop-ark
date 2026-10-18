@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot, assertIsRepo, resolveAny } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, assertIsRepo, resolveAny, mapOsError } from './ctx.js';
 
 export default {
   name: 'git_reset',
@@ -20,7 +20,8 @@ export default {
   async execute(_id, params, _signal, _onUpdate, ctx) {
     try {
       const { root, outsideRoot, hint } = repoRoot(params, ctx);
-      if (outsideRoot) return { content: [{ type: 'text', text: hint }], isError: true };
+      // FR-204-012：越出工作区根只提示不阻断（pi 信任模型无逐写审批）；hint 追加到成功输出
+      const hintSuffix = hint ? '\n' + hint : '';
       const { git } = gitRuntime();
       const fs = fsFor(root);
       await assertIsRepo(root);
@@ -34,7 +35,7 @@ export default {
         await git.resetIndex({ fs, dir: root, filepath: params.filepath, ref: headCommit || undefined });
         return {
           content: [{ type: 'text', text: `已重置暂存区文件：${params.filepath}` }],
-          details: { ok: true, filepath: params.filepath },
+          details: { ok: true, ...(hint ? { hint } : {}), filepath: params.filepath },
         };
       }
 
@@ -70,7 +71,8 @@ export default {
         details: { ok: true, branch, target: oid, mode },
       };
     } catch (e) {
-      return { content: [{ type: 'text', text: `git_reset 失败：${e.message}` }], details: { ok: false, message: e.message }, isError: true };
+      mapOsError(e, root);
+      return { content: [{ type: 'text', text: `git_reset 失败：${e.message}${hintSuffix}` }], details: { ok: false, message: e.message }, isError: true };
     }
   },
 };

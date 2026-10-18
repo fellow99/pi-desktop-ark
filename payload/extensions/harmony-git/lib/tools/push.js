@@ -1,4 +1,4 @@
-import { gitRuntime, repoRoot, assertIsRepo, netFor, rethrowNet, fsFor } from './ctx.js';
+import { gitRuntime, repoRoot, assertIsRepo, netFor, rethrowNet, fsFor, displayUrl, isAbortError, abortResult, mapOsError } from './ctx.js';
 
 export default {
   name: 'git_push',
@@ -21,7 +21,8 @@ export default {
   async execute(_id, params, _signal, _onUpdate, ctx) {
     try {
       const { root, outsideRoot, hint } = repoRoot(params, ctx);
-      if (outsideRoot) return { content: [{ type: 'text', text: hint }], isError: true };
+      // FR-204-012：越出工作区根只提示不阻断（pi 信任模型无逐写审批）；hint 追加到成功输出
+      const hintSuffix = hint ? '\n' + hint : '';
       const { git } = gitRuntime();
       await assertIsRepo(root);
       const remote = params.remote || 'origin';
@@ -36,11 +37,12 @@ export default {
       const ref = params.ref || (await git.currentBranch({ fs, dir: root, fullname: false }));
       if (!ref) return { content: [{ type: 'text', text: '当前处于 detached HEAD，无法 push，请指定 ref。' }], isError: true };
       const net = netFor(root, url);
+      const shownUrl = displayUrl(url);
       try {
         const res = await git.push({
           fs, http: net.http, dir: root, url, remote,
           ref, remoteRef: params.remoteRef || ref,
-          force: params.force === true,
+          force: params.force === true, signal: _signal,
           ...net.auth,
         });
         if (!res.ok) {
@@ -55,14 +57,16 @@ export default {
           };
         }
         return {
-          content: [{ type: 'text', text: `push 完成：${ref} → ${url} ${params.remoteRef || ref}${params.force ? '（强制）' : ''}` }],
-          details: { ok: true, url, ref, remoteRef: params.remoteRef || ref, force: params.force === true },
+          content: [{ type: 'text', text: `push 完成：${ref} → ${shownUrl} ${params.remoteRef || ref}${params.force ? '（强制）' : ''}` }],
+          details: { ok: true, ...(hint ? { hint } : {}), url: shownUrl, ref, remoteRef: params.remoteRef || ref, force: params.force === true },
         };
       } catch (e) {
+        if (isAbortError(e, _signal)) return abortResult('git_push');
         rethrowNet(e, url);
       }
     } catch (e) {
-      return { content: [{ type: 'text', text: `git_push 失败：${e.message}` }], details: { ok: false, message: e.message }, isError: true };
+      mapOsError(e, root);
+      return { content: [{ type: 'text', text: `git_push 失败：${e.message}${hintSuffix}` }], details: { ok: false, message: e.message }, isError: true };
     }
   },
 };

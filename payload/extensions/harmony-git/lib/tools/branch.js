@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot, assertIsRepo } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, assertIsRepo, mapOsError } from './ctx.js';
 
 export default {
   name: 'git_branch',
@@ -15,6 +15,7 @@ export default {
       checkout: { type: 'boolean', description: 'create 后是否切换过去（默认 false）' },
     },
       },
+  executionMode: 'sequential',
   async execute(_id, params, _signal, _onUpdate, ctx) {
     try {
       const { git } = gitRuntime();
@@ -45,6 +46,7 @@ export default {
       }
       throw new Error(`unknown action ${action}`);
     } catch (e) {
+      mapOsError(e, root);
       return { content: [{ type: 'text', text: `git_branch 失败：${e.message}` }], details: {}, isError: true };
     }
   },

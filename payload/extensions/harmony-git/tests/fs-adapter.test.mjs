@@ -28,3 +28,21 @@ test('isPromiseFs 探测：无参调用 readFile 返回 promise 而非同步抛�
   assert.equal(typeof r.then, 'function');
   await assert.rejects(r);
 });
+
+
+test('TC-H04: 根外软链读写必须拒绝（resolveWithinReal 已接线）', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chroot-'));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'outside-'));
+  fs.writeFileSync(path.join(outside, 'secret.txt'), 'TOP-SECRET');
+  const link = path.join(root, 'link');
+  try {
+    fs.symlinkSync(outside, link, 'dir');
+  } catch (e) {
+    t.skip(`平台不允许创建软链（${e.code}）`);
+    return;
+  }
+  const afs = createRepositoryFs(root);
+  await assert.rejects(() => afs.promises.readFile('link/secret.txt'), FenceError);
+  await assert.rejects(() => afs.promises.writeFile('link/evil.txt', 'x'), FenceError);
+  await assert.rejects(() => afs.promises.stat('link/secret.txt'), FenceError);
+});

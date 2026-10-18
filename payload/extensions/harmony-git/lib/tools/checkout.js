@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot, assertIsRepo } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, assertIsRepo, mapOsError } from './ctx.js';
 
 export default {
   name: 'git_checkout',
@@ -28,6 +28,7 @@ export default {
         : `Checked out ${params.ref}`;
       return { content: [{ type: 'text', text }], details: { ref: params.ref } };
     } catch (e) {
+      mapOsError(e, root);
       return { content: [{ type: 'text', text: `git_checkout 失败：${e.message}` }], details: {}, isError: true };
     }
   },

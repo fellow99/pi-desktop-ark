@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, mapOsError } from './ctx.js';
 
 export default {
   name: 'git_init',
@@ -12,6 +12,7 @@ export default {
       defaultBranch: { type: 'string', description: 'Initial branch name (default "main")' },
     },
       },
+  executionMode: 'sequential',
   annotations: { destructiveHint: false },
   async execute(_id, params, _signal, _onUpdate, ctx) {
     try {
@@ -22,6 +23,7 @@ export default {
       const text = `Initialized empty git repository in ${root} (default branch "${defaultBranch}")${hint ? '\n' + hint : ''}`;
       return { content: [{ type: 'text', text }], details: { dir: root, defaultBranch } };
     } catch (e) {
+      mapOsError(e, root);
       return { content: [{ type: 'text', text: `git_init 失败：${e.message}` }], details: {}, isError: true };
     }
   },

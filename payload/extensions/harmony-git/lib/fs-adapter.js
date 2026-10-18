@@ -12,7 +12,7 @@
  */
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
-import { resolveWithin } from './fence.js';
+import { resolveWithin, resolveWithinReal } from './fence.js';
 
 /**
  * 创建 isomorphic-git 期望的 fs 形（{ promises: {...} }），chroot 到 root。
@@ -20,21 +20,24 @@ import { resolveWithin } from './fence.js';
  */
 export function createRepositoryFs(root) {
   const w = (rel) => resolveWithin(root, rel);
+  // 软链防护（FR-204-010）：读写真实数据的路径必须 realpath 复核，防根外软链。
+  // lstat/readlink/symlink 只操作链接本身，不跟随目标，用词法校验即可。
+  const wr = (rel) => resolveWithinReal(root, rel);
   const promises = {
     // —— 读 ——
-    async readFile(rel, opts) { return fsp.readFile(w(rel), opts); },
-    async readdir(rel) { return fsp.readdir(w(rel)); },
-    async stat(rel) { return fsp.stat(w(rel)); },
+    async readFile(rel, opts) { return fsp.readFile(await wr(rel), opts); },
+    async readdir(rel) { return fsp.readdir(await wr(rel)); },
+    async stat(rel) { return fsp.stat(await wr(rel)); },
     async lstat(rel) { return fsp.lstat(w(rel)); },
     async readlink(rel) { return fsp.readlink(w(rel)); },
     // —— 写 ——
-    async writeFile(rel, data, opts) { return fsp.writeFile(w(rel), data, opts); },
+    async writeFile(rel, data, opts) { return fsp.writeFile(await wr(rel), data, opts); },
     async mkdir(rel, opts) { return fsp.mkdir(w(rel), opts); },
-    async rmdir(rel) { return fsp.rmdir(w(rel)); },
+    async rmdir(rel) { return fsp.rmdir(await wr(rel)); },
     async unlink(rel) { return fsp.unlink(w(rel)); },
-    async rename(from, to) { return fsp.rename(w(from), w(to)); },
+    async rename(from, to) { return fsp.rename(await wr(from), w(to)); },
     async symlink(target, rel) { return fsp.symlink(target, w(rel)); },
-    async chmod(rel, mode) { return fsp.chmod(w(rel), mode); },
+    async chmod(rel, mode) { return fsp.chmod(await wr(rel), mode); },
     // isomorphic-git 的 bindFs 递归删除首选 rm；rmSync 兜底用 rmdir/unlink 组合。
     async rm(rel, opts) { return fsp.rm(w(rel), opts); },
   };

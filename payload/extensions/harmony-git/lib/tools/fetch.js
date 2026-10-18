@@ -1,4 +1,4 @@
-import { gitRuntime, repoRoot, assertIsRepo, netFor, rethrowNet, fsFor } from './ctx.js';
+import { gitRuntime, repoRoot, assertIsRepo, netFor, rethrowNet, fsFor, displayUrl, isAbortError, abortResult, mapOsError } from './ctx.js';
 
 export default {
   name: 'git_fetch',
@@ -19,7 +19,8 @@ export default {
   async execute(_id, params, _signal, _onUpdate, ctx) {
     try {
       const { root, outsideRoot, hint } = repoRoot(params, ctx);
-      if (outsideRoot) return { content: [{ type: 'text', text: hint }], isError: true };
+      // FR-204-012：越出工作区根只提示不阻断（pi 信任模型无逐写审批）；hint 追加到成功输出
+      const hintSuffix = hint ? '\n' + hint : '';
       const { git } = gitRuntime();
       await assertIsRepo(root);
       const remote = params.remote || 'origin';
@@ -31,21 +32,24 @@ export default {
         url = hit.url;
       }
       const { fs, http, auth } = netFor(root, url);
+      const shownUrl = displayUrl(url);
       try {
         const res = await git.fetch({
           fs, http, dir: root, url, remote,
-          ref: params.ref, depth: params.depth,
+          ref: params.ref, depth: params.depth, signal: _signal,
           ...auth,
         });
         return {
-          content: [{ type: 'text', text: `fetch 完成：${url}${params.ref ? `（${params.ref}）` : ''}` }],
-          details: { ok: true, url, remote, fetchHead: res.fetchHead || null, pruned: res.pruned || [] },
+          content: [{ type: 'text', text: `fetch 完成：${shownUrl}${params.ref ? `（${params.ref}）` : ''}` }],
+          details: { ok: true, ...(hint ? { hint } : {}), url: shownUrl, remote, fetchHead: res.fetchHead || null, pruned: res.pruned || [] },
         };
       } catch (e) {
+        if (isAbortError(e, _signal)) return abortResult('git_fetch');
         rethrowNet(e, url);
       }
     } catch (e) {
-      return { content: [{ type: 'text', text: `git_fetch 失败：${e.message}` }], details: { ok: false, message: e.message }, isError: true };
+      mapOsError(e, root);
+      return { content: [{ type: 'text', text: `git_fetch 失败：${e.message}${hintSuffix}` }], details: { ok: false, message: e.message }, isError: true };
     }
   },
 };

@@ -9,7 +9,7 @@ export function groupStatus(matrix) {
   for (const [fp, head, workdir, stage] of matrix) {
     // 未跟踪：HEAD=0, workdir=2, stage=0
     if (head === 0 && workdir === 2 && stage === 0) { g.untracked.push(fp); continue; }
-    if (stage === 3) { g.conflicted.push(fp); continue; }
+    if (stage === 3) { g.conflicted.push(`${fp}（暂存区与 HEAD/工作区均不一致，非合并冲突标记）`); continue; }
     // 已删除（工作区 0，HEAD 有）
     if (head === 1 && workdir === 0) { g.deleted.push(fp); continue; }
     // 已暂存（stage >= 2 且与 HEAD 不同）

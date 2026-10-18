@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot, assertIsRepo } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, assertIsRepo, mapOsError } from './ctx.js';
 
 const ALLOWED_KEYS = new Set(['user.name', 'user.email']);
 
@@ -21,7 +21,8 @@ export default {
   async execute(_id, params, _signal, _onUpdate, ctx) {
     try {
       const { root, outsideRoot, hint } = repoRoot(params, ctx);
-      if (outsideRoot) return { content: [{ type: 'text', text: hint }], isError: true };
+      // FR-204-012：越出工作区根只提示不阻断（pi 信任模型无逐写审批）；hint 追加到成功输出
+      const hintSuffix = hint ? '\n' + hint : '';
       if (!ALLOWED_KEYS.has(params.key)) {
         return {
           content: [{ type: 'text', text: `不允许的键：${params.key}。仅支持 ${[...ALLOWED_KEYS].join('、')}。` }],
@@ -36,7 +37,7 @@ export default {
         const value = await git.getConfig({ fs, dir: root, path: params.key });
         return {
           content: [{ type: 'text', text: value == null ? `${params.key} 未设置。` : `${params.key} = ${value}` }],
-          details: { ok: true, key: params.key, value: value ?? null },
+          details: { ok: true, ...(hint ? { hint } : {}), key: params.key, value: value ?? null },
         };
       }
       if (typeof params.value !== 'string' || !params.value) {
@@ -45,7 +46,8 @@ export default {
       await git.setConfig({ fs, dir: root, path: params.key, value: params.value });
       return { content: [{ type: 'text', text: `已设置 ${params.key} = ${params.value}` }], details: { ok: true, key: params.key, value: params.value } };
     } catch (e) {
-      return { content: [{ type: 'text', text: `git_config 失败：${e.message}` }], details: { ok: false, message: e.message }, isError: true };
+      mapOsError(e, root);
+      return { content: [{ type: 'text', text: `git_config 失败：${e.message}${hintSuffix}` }], details: { ok: false, message: e.message }, isError: true };
     }
   },
 };

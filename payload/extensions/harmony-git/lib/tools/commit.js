@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot, assertIsRepo } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, assertIsRepo, mapOsError } from './ctx.js';
 
 const DEFAULT_AUTHOR = { name: 'yourname', email: 'yourname@somehost' };
 
@@ -42,6 +42,7 @@ export default {
       const text = `Created commit ${oid.slice(0, 12)} by ${author.name} <${author.email}>`;
       return { content: [{ type: 'text', text }], details: { oid, author } };
     } catch (e) {
+      mapOsError(e, root);
       return { content: [{ type: 'text', text: `git_commit 失败：${e.message}` }], details: {}, isError: true };
     }
   },

@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot, assertIsRepo } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, assertIsRepo, mapOsError } from './ctx.js';
 
 export default {
   name: 'git_add',
@@ -45,6 +45,7 @@ export default {
       await git.add({ fs, dir: root, filepath: params.filepath });
       return { content: [{ type: 'text', text: `Staged for commit: A ${params.filepath}` }], details: {} };
     } catch (e) {
+      mapOsError(e, root);
       return { content: [{ type: 'text', text: `git_add 失败：${e.message}` }], details: {}, isError: true };
     }
   },

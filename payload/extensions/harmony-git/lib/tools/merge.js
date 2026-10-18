@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot, assertIsRepo } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, assertIsRepo, mapOsError } from './ctx.js';
 import { renderConflicts } from '../report.js';
 
 export default {
@@ -22,7 +22,8 @@ export default {
   async execute(_id, params, _signal, _onUpdate, ctx) {
     try {
       const { root, outsideRoot, hint } = repoRoot(params, ctx);
-      if (outsideRoot) return { content: [{ type: 'text', text: hint }], isError: true };
+      // FR-204-012：越出工作区根只提示不阻断（pi 信任模型无逐写审批）；hint 追加到成功输出
+      const hintSuffix = hint ? '\n' + hint : '';
       const { git } = gitRuntime();
       const fs = fsFor(root);
       await assertIsRepo(root);
@@ -31,14 +32,25 @@ export default {
         email: params.authorEmail || 'yourname@somehost',
       };
       try {
+        // ours 必须传分支名而非 'HEAD'：isomorphic-git 用 ours=HEAD 时 FF 合并不更新
+        // 分支 ref 且把 .git/HEAD 写成裸 oid（detached），后续 status/commit 全乱。
+        const ours = await git.currentBranch({ fs, dir: root, fullname: false });
+        if (!ours) {
+          return { content: [{ type: 'text', text: '当前处于 detached HEAD，无法 merge；请先 git_checkout 到分支。' }], isError: true };
+        }
         const res = await git.merge({
-          fs, dir: root, ours: 'HEAD', theirs: params.theirs, author,
+          fs, dir: root, ours, theirs: params.theirs, author,
           message: params.message, fastForward: true,
         });
+        // isomorphic-git merge 只更新 index+ref，不写工作区（_pull 内部会再 checkout）；
+        // 不同步会让磁盘文件停在合并前，status 出现幽灵 modified/deleted → 必须补 checkout。
+        if (!res.alreadyMerged) {
+          await git.checkout({ fs, dir: root, ref: ours, force: true });
+        }
         const kind = res.fastForward ? 'fast-forward' : (res.alreadyMerged ? '已是最新（无需合并）' : '合并提交');
         return {
           content: [{ type: 'text', text: `合并完成（${kind}）：${(res.oid || '').slice(0, 7) || '—'}` }],
-          details: { ok: true, ...res },
+          details: { ok: true, ...(hint ? { hint } : {}), ...res },
         };
       } catch (e) {
         if (e && e.data && Array.isArray(e.data.filepaths)) {
@@ -52,7 +64,8 @@ export default {
         throw e;
       }
     } catch (e) {
-      return { content: [{ type: 'text', text: `git_merge 失败：${e.message}` }], details: { ok: false, message: e.message }, isError: true };
+      mapOsError(e, root);
+      return { content: [{ type: 'text', text: `git_merge 失败：${e.message}${hintSuffix}` }], details: { ok: false, message: e.message }, isError: true };
     }
   },
 };

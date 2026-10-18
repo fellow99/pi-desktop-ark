@@ -1,4 +1,4 @@
-// synced-from: pi-desktop-hos@ef6fff8（单源：pi-desktop-hos/extensions/harmony-git；请勿在 ark 侧直接修改）
+// synced-from: pi-desktop-hos@760c12d（单源：pi-desktop-hos/extensions/harmony-git；请勿在 ark 侧直接修改）
 // harmony-git — pi-agent 扩展工厂
 // 由 $PI_CODING_AGENT_DIR/extensions/ 加载；导出 default function (pi) => void
 import init from './lib/tools/init.js';
@@ -13,6 +13,7 @@ import checkout from './lib/tools/checkout.js';
 import reset from './lib/tools/reset.js';
 import merge from './lib/tools/merge.js';
 import cherryPick from './lib/tools/cherry-pick.js';
+import revert from './lib/tools/revert.js';
 import stash from './lib/tools/stash.js';
 import tag from './lib/tools/tag.js';
 import diff from './lib/tools/diff.js';
@@ -25,7 +26,7 @@ import credentials from './lib/tools/credentials.js';
 
 const TOOLS = [
   init, clone, status, log, show, branch, add, commit, checkout, reset,
-  merge, cherryPick, stash, tag, diff, remote, fetchTool, pull, push, config, credentials,
+  merge, cherryPick, revert, stash, tag, diff, remote, fetchTool, pull, push, config, credentials,
 ];
 
 export default function register(pi) {

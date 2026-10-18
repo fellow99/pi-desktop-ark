@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot, assertIsRepo } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, assertIsRepo, resolveAny, mapOsError } from './ctx.js';
 import { renderCommit } from '../report.js';
 
 export default {
@@ -21,7 +21,7 @@ export default {
       assertIsRepo(root);
       const fs = fsFor(root);
       const ref = params.ref || 'HEAD';
-      const oid = await git.resolveRef({ fs, dir: root, ref });
+      const oid = await resolveAny(git, fs, root, ref);
       let commit;
       try {
         commit = await git.readCommit({ fs, dir: root, oid });
@@ -35,6 +35,7 @@ export default {
       if (msg) lines.push('message:\n' + msg);
       return { content: [{ type: 'text', text: lines.join('\n') }], details: { oid, parents } };
     } catch (e) {
+      mapOsError(e, root);
       return { content: [{ type: 'text', text: `git_show 失败：${e.message}` }], details: {}, isError: true };
     }
   },

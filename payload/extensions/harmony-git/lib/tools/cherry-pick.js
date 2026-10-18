@@ -1,4 +1,4 @@
-import { gitRuntime, fsFor, repoRoot, assertIsRepo, resolveAny } from './ctx.js';
+import { gitRuntime, fsFor, repoRoot, assertIsRepo, resolveAny, mapOsError } from './ctx.js';
 import { renderConflicts } from '../report.js';
 
 export default {
@@ -20,23 +20,25 @@ export default {
   async execute(_id, params, _signal, _onUpdate, ctx) {
     try {
       const { root, outsideRoot, hint } = repoRoot(params, ctx);
-      if (outsideRoot) return { content: [{ type: 'text', text: hint }], isError: true };
+      // FR-204-012：越出工作区根只提示不阻断（pi 信任模型无逐写审批）；hint 追加到成功输出
+      const hintSuffix = hint ? '\n' + hint : '';
       const { git } = gitRuntime();
       const fs = fsFor(root);
       await assertIsRepo(root);
-      const author = {
+      // isomorphic-git cherryPick 保留原提交的 author，只接受 committer
+      const committer = {
         name: params.authorName || 'yourname',
         email: params.authorEmail || 'yourname@somehost',
       };
       try {
         const oid = await resolveAny(git, fs, root, params.oid);
-        const res = await git.cherryPick({ fs, dir: root, oid, author });
+        const res = await git.cherryPick({ fs, dir: root, oid, committer });
         // isomorphic-git cherryPick 直接返回新提交 oid 字符串（或 undefined）
         const newOid = typeof res === 'string' ? res
           : await git.resolveRef({ fs, dir: root, ref: 'HEAD' }).catch(() => oid);
         return {
           content: [{ type: 'text', text: `cherry-pick 完成：${newOid.slice(0, 7)}` }],
-          details: { ok: true, oid: newOid },
+          details: { ok: true, ...(hint ? { hint } : {}), oid: newOid },
         };
       } catch (e) {
         if (e && e.data && Array.isArray(e.data.filepaths)) {
@@ -50,7 +52,8 @@ export default {
         throw e;
       }
     } catch (e) {
-      return { content: [{ type: 'text', text: `git_cherry_pick 失败：${e.message}` }], details: { ok: false, message: e.message }, isError: true };
+      mapOsError(e, root);
+      return { content: [{ type: 'text', text: `git_cherry_pick 失败：${e.message}${hintSuffix}` }], details: { ok: false, message: e.message }, isError: true };
     }
   },
 };
