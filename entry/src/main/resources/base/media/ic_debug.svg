@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- debug：一只甲虫（bug）侧视简化形。单色灰，供壳层右下角标识旁使用。 -->
+  <g fill="none" stroke="#8A8A8A" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="7.2" y="8.4" width="9.6" height="11.6" rx="4.4"/>
+    <path d="M12 8.4V6.6"/>
+    <path d="M9.2 6.7a2.8 2.8 0 0 1 5.6 0"/>
+    <path d="M7.2 12.2H3.8M7.2 16.2H3.8M16.8 12.2h3.4M16.8 16.2h3.4"/>
+    <path d="M8.9 20.4 6.6 22.4M15.1 20.4 17.4 22.4"/>
+    <path d="M10.2 11.6h.02M13.8 11.6h.02"/>
+  </g>
+</svg>

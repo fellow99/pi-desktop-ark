@@ -13,10 +13,14 @@ import { HostCapabilities } from '../host/HostCapabilities';
  *   ③ 探活成功后 `loadUrl('http://127.0.0.1:<实际端口>/')`（端口来自 Node 侧回报，**不是常量**）
  *      → 页面由**本地服务**渲染，天然同源、零 CORS；
  *   ④ 起来后 `clearHistory()`：否则返回键/手势会把用户永久卡在「启动中」的 boot 页（⑧）；
- *   ⑤ 失败：切到应用内 `error.html`（带失败详情与「请重启应用」），并保留诊断面板入口。
+ *   ⑤ 失败：切到应用内 `error.html`（带失败详情与「请重启应用」），并保留「App调试」弹窗入口。
  *
- * 判据口径（工程规划 §2.4）：本机 `uitest dumpLayout` **拿不到结果**，所以「界面上的东西」
- * 用 `snapshot_display` 截图 + 诊断面板里的结构化字段来断言；接口类判据走 HTTP 端点。
+ * 壳层形态（2026-10-18）：顶部**不再**常驻调试区。壳层右下角常驻灰字
+ * 「内容由 AI 生成，仅供参考」，其右侧一个 `debug` 图标，点击弹出「App调试」弹窗
+ * （状态 / 阶段 / 加载详情 / 失败 / 能力提示 / 诊断日志尾）。
+ *
+ * 判据口径：`uitest dumpLayout` **在本机可用**，界面断言可同时用截图与 dump 文本；
+ * 结构化字段在「App调试」弹窗里，接口类判据走 HTTP 端点。
  */
 @Entry
 @Component
@@ -25,7 +29,7 @@ struct Index {
   @State detail: string = '(未启动)';
   @State stage: string = 'idle（尚未启动）';
   @State lastError: string = '';
-  @State diagOpen: boolean = false;
+  @State appDebugOpen: boolean = false;
   @State diagText: string = '';
   private controller: webview.WebviewController = new webview.WebviewController();
   private launched: boolean = false;
@@ -95,7 +99,7 @@ struct Index {
       this.controller.loadUrl($rawfile(ERROR_PAGE));
       Log.info('已切到应用内错误页：' + ERROR_PAGE);
     } catch (e) {
-      Log.error('错误页加载失败（界面仍会显示状态行与诊断面板）：' + JSON.stringify(e));
+      Log.error('错误页加载失败（界面仍会显示状态与「App调试」弹窗入口）：' + JSON.stringify(e));
     }
   }
 
@@ -174,15 +178,15 @@ struct Index {
       + '\n\n── 载荷日志尾 app.log（⑱ 独立通道）────────────────────\n'
       + appLog
       + '\n\n── 提示 ────────────────────────────────────────────────\n'
-      + '本机 uitest dumpLayout 拿不到结果：请用 snapshot_display 截图，或读上面的结构化字段。';
+      + '本机 uitest dumpLayout 可用；此外可用 snapshot_display 截图取证。';
     Log.info('诊断面板已刷新（' + this.diagText.length + ' 字符）');
   }
 
-  private toggleDiagnostics(): void {
-    this.diagOpen = !this.diagOpen;
-    if (this.diagOpen) {
-      this.refreshDiagnostics();
-    }
+  /** 打开「App调试」弹窗（壳层右下角 debug 图标入口） */
+  private openAppDebug(): void {
+    this.appDebugOpen = true;
+    this.refreshDiagnostics();
+    Log.info('App调试弹窗已打开');
   }
 
   /** 是否指向本机服务（导航围栏的放行判据：**只放行本服务的 origin**） */
@@ -223,9 +227,9 @@ struct Index {
   }
 
   onBackPress(): boolean {
-    if (this.diagOpen) {
-      this.diagOpen = false;
-      Log.info('返回键：关闭诊断面板');
+    if (this.appDebugOpen) {
+      this.appDebugOpen = false;
+      Log.info('返回键：关闭 App调试弹窗');
       return true;
     }
     if (this.status === UIState.READY) {
@@ -237,37 +241,34 @@ struct Index {
     return false;
   }
 
+  /** 「App调试」弹窗内的状态行（原顶部常驻调试区的第一行） */
   @Builder
   statusRow() {
     Row() {
-      Text('Pi Desktop V2')
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
-        .layoutWeight(1)
+      Text('状态')
+        .fontSize(13)
+        .fontColor('#666666')
       Text(this.status)
-        .fontSize(14)
+        .fontSize(13)
+        .fontWeight(FontWeight.Medium)
         .fontColor(this.status === UIState.READY ? Color.Green
           : (this.status === UIState.FAILED ? Color.Red : Color.Orange))
-      Button('诊断')
-        .fontSize(14)
-        .margin({ left: 12 })
-        .onClick(() => {
-          this.toggleDiagnostics();
-        })
+        .margin({ left: 6 })
+      Blank()
       if (this.status === UIState.READY) {
         // 「重新加载页面」≠「重启 Node」：只重新加载当前页面（文案如实，不承诺重启）
         Button('重载页面')
-          .fontSize(14)
-          .margin({ left: 8 })
+          .fontSize(13)
+          .height(30)
           .onClick(() => {
             this.controller.loadUrl(PiDesktopRuntime.getInstance().getUrl());
           })
       }
     }
     .width('100%')
-    .padding(12)
   }
 
+  /** 阶段 / 加载详情 / 失败 / 能力提示（原顶部常驻调试区的第二段） */
   @Builder
   statusDetail() {
     Column() {
@@ -293,115 +294,174 @@ struct Index {
         .width('100%')
     }
     .width('100%')
-    .padding({ left: 12, right: 12, bottom: 8 })
+    .alignItems(HorizontalAlign.Start)
+    .padding({ top: 8, bottom: 8 })
   }
 
+  /**
+   * App 调试弹窗（替代原先**常驻顶部**的「App调试」区）。
+   *
+   * 为什么改成弹窗：阶段 / 端口 / 能力缺失 / 日志尾对普通用户是噪声，但它是本工程
+   * **唯一的内置排障入口**（hilog 的 INFO 行取不到、hdc 对沙箱只读）。所以保留为"按需弹出"，
+   * 入口固定放在壳层右下角的 `debug` 图标上（`build()` 里那一行）。
+   */
   @Builder
-  diagnosticsPanel() {
-    Column() {
-      Row() {
-        Text('诊断 / 日志')
-          .fontSize(15)
-          .fontWeight(FontWeight.Bold)
-          .layoutWeight(1)
-        Button('刷新')
-          .fontSize(13)
-          .onClick(() => {
-            this.refreshDiagnostics();
-          })
-        Button('关闭')
-          .fontSize(13)
-          .margin({ left: 8 })
-          .onClick(() => {
-            this.diagOpen = false;
-          })
-      }
-      .width('100%')
-      .padding({ bottom: 8 })
+  appDebugDialog() {
+    Stack({ alignContent: Alignment.Center }) {
+      // 遮罩：点空白处关闭（与系统弹窗一致）
+      Column()
+        .width('100%')
+        .height('100%')
+        .backgroundColor('rgba(0, 0, 0, 0.35)')
+        .onClick(() => {
+          this.appDebugOpen = false;
+        })
 
-      Scroll() {
-        Text(this.diagText)
-          .fontSize(11)
-          .fontFamily('monospace')
-          .textAlign(TextAlign.Start)
-          .copyOption(CopyOptions.LocalDevice)
-          .width('100%')
+      Column() {
+        Row() {
+          Text('App调试')
+            .fontSize(16)
+            .fontWeight(FontWeight.Bold)
+            .layoutWeight(1)
+          Button('刷新')
+            .fontSize(13)
+            .height(30)
+            .onClick(() => {
+              this.refreshDiagnostics();
+            })
+          Button('关闭')
+            .fontSize(13)
+            .height(30)
+            .margin({ left: 8 })
+            .onClick(() => {
+              this.appDebugOpen = false;
+            })
+        }
+        .width('100%')
+        .padding({ bottom: 10 })
+
+        this.statusRow()
+        this.statusDetail()
+
+        Divider()
+          .color('#E0E0E0')
+          .margin({ bottom: 8 })
+
+        Scroll() {
+          Text(this.diagText)
+            .fontSize(11)
+            .fontFamily('monospace')
+            .textAlign(TextAlign.Start)
+            .copyOption(CopyOptions.LocalDevice)
+            .width('100%')
+        }
+        .layoutWeight(1)
+        .width('100%')
+        .scrollBar(BarState.Auto)
       }
-      .layoutWeight(1)
-      .width('100%')
-      .scrollBar(BarState.Auto)
+      .width('86%')
+      .height('76%')
+      .padding(16)
+      .backgroundColor(Color.White)
+      .borderRadius(16)
+      .shadow({ radius: 24, color: '#33000000', offsetX: 0, offsetY: 6 })
     }
     .width('100%')
-    .height('60%')
-    .padding(12)
-    .backgroundColor('#F2F3F5')
-    .border({ width: { top: 1 }, color: '#D0D0D0' })
+    .height('100%')
   }
 
   build() {
-    Column() {
-      this.statusRow()
-      this.statusDetail()
-
-      // 主渲染区：先本地 boot 页；就绪后由代码切到 127.0.0.1:<实际端口>
-      Stack() {
-        Web({ src: $rawfile('boot.html'), controller: this.controller })
-          .javaScriptAccess(true)
-          .domStorageAccess(true)
-          // §5 第 1 条：缺 databaseAccess 时部分 Web 存储 API（IndexedDB）不可用，SPA 首屏可能崩
-          .databaseAccess(true)
-          .width('100%')
-          .height('100%')
-          .onControllerAttached(() => {
-            Log.info('ArkWeb controller attached');
-          })
-          .onPageEnd((event: OnPageEndEvent) => {
-            Log.info('页面加载完成：' + event.url);
-            if (this.errorPageLoaded) {
-              this.injectErrorDetail();
-              return;
-            }
-            if (this.isOwnServiceUrl(event.url)) {
-              if (!this.historyCleared) {
-                try {
-                  this.controller.clearHistory();
-                  this.historyCleared = true;
-                  Log.info('已清除 Web 历史（返回键不会再回到 boot 页，⑧）');
-                } catch (e) {
-                  Log.warn('clearHistory 失败（返回键可能仍会回到 boot 页）：' + JSON.stringify(e));
-                }
+    // 壳层 = Web + 底部一条右对齐的常驻标识；调试区不再常驻，收进「App调试」弹窗
+    Stack({ alignContent: Alignment.BottomEnd }) {
+      Column() {
+        // 主渲染区：先本地 boot 页；就绪后由代码切到 127.0.0.1:<实际端口>
+        Stack() {
+          Web({ src: $rawfile('boot.html'), controller: this.controller })
+            .javaScriptAccess(true)
+            .domStorageAccess(true)
+            // §5 第 1 条：缺 databaseAccess 时部分 Web 存储 API（IndexedDB）不可用，SPA 首屏可能崩
+            .databaseAccess(true)
+            .width('100%')
+            .height('100%')
+            .onControllerAttached(() => {
+              Log.info('ArkWeb controller attached');
+            })
+            .onPageEnd((event: OnPageEndEvent) => {
+              Log.info('页面加载完成：' + event.url);
+              if (this.errorPageLoaded) {
+                this.injectErrorDetail();
+                return;
               }
-              this.status = UIState.READY;
-              this.stage = PiDesktopRuntime.getInstance().getStage();
-              this.detail = '已加载本地服务页面：' + event.url;
-            }
-          })
-          .onLoadIntercept((event: OnLoadInterceptEvent) => {
-            const url: string = event.data.getRequestUrl();
-            const mainFrame: boolean = event.data.isMainFrame();
-            // 子 frame（内嵌 iframe / 资源）一律放行：拦了会把页面搞坏（⑨）
-            if (!mainFrame) {
-              return false;
-            }
-            if (this.isAppLocalUrl(url) || this.isOwnServiceUrl(url)) {
-              return false;
-            }
-            // 其余主 frame 导航一律阻断并分流到系统浏览器
-            this.openExternal(url);
-            return true;
-          })
-          .onWindowNew((event: OnWindowNewEvent) => {
-            // 弹窗拦截：**不静默丢弃**。把新窗口的控制器指回本 Web ⇒ 弹窗在本组件内打开，
-            // 随后的主 frame 导航会被上面的 onLoadIntercept 分流（外链→系统浏览器）。
-            Log.warn('拦截到 window.open / target=_blank：改由本 Web 承载后分流：' + event.targetUrl);
-            event.handler.setWebController(this.controller);
-          })
-      }
-      .layoutWeight(1)
-      .width('100%')
+              if (this.isOwnServiceUrl(event.url)) {
+                if (!this.historyCleared) {
+                  try {
+                    this.controller.clearHistory();
+                    this.historyCleared = true;
+                    Log.info('已清除 Web 历史（返回键不会再回到 boot 页，⑧）');
+                  } catch (e) {
+                    Log.warn('clearHistory 失败（返回键可能仍会回到 boot 页）：' + JSON.stringify(e));
+                  }
+                }
+                this.status = UIState.READY;
+                this.stage = PiDesktopRuntime.getInstance().getStage();
+                this.detail = '已加载本地服务页面：' + event.url;
+              }
+            })
+            .onLoadIntercept((event: OnLoadInterceptEvent) => {
+              const url: string = event.data.getRequestUrl();
+              const mainFrame: boolean = event.data.isMainFrame();
+              // 子 frame（内嵌 iframe / 资源）一律放行：拦了会把页面搞坏（⑨）
+              if (!mainFrame) {
+                return false;
+              }
+              if (this.isAppLocalUrl(url) || this.isOwnServiceUrl(url)) {
+                return false;
+              }
+              // 其余主 frame 导航一律阻断并分流到系统浏览器
+              this.openExternal(url);
+              return true;
+            })
+            .onWindowNew((event: OnWindowNewEvent) => {
+              // 弹窗拦截：**不静默丢弃**。把新窗口的控制器指回本 Web ⇒ 弹窗在本组件内打开，
+              // 随后的主 frame 导航会被上面的 onLoadIntercept 分流（外链→系统浏览器）。
+              Log.warn('拦截到 window.open / target=_blank：改由本 Web 承载后分流：' + event.targetUrl);
+              event.handler.setWebController(this.controller);
+            })
+        }
+        .layoutWeight(1)
+        .width('100%')
 
-      if (this.diagOpen) {
-        this.diagnosticsPanel()
+        // 壳层右下角：**常驻**灰字标识 + debug 图标（点击弹「App调试」）
+        Row() {
+          Text('内容由 AI 生成，仅供参考')
+            .fontSize(12)
+            .fontColor('#8A8A8A')
+          Row() {
+            Image($r('app.media.ic_debug'))
+              .width(15)
+              .height(15)
+              .objectFit(ImageFit.Contain)
+          }
+          .padding({ left: 6, right: 6, top: 5, bottom: 5 })
+          .margin({ left: 2 })
+          .borderRadius(6)
+          .accessibilityText('debug')
+          .onClick(() => {
+            this.openAppDebug();
+          })
+        }
+        .width('100%')
+        .height(28)
+        .padding({ right: 10 })
+        .justifyContent(FlexAlign.End)
+        .backgroundColor('#F7F8FA')
+        .border({ width: { top: 1 }, color: '#E8E8E8' })
+      }
+      .width('100%')
+      .height('100%')
+
+      if (this.appDebugOpen) {
+        this.appDebugDialog()
       }
     }
     .width('100%')
