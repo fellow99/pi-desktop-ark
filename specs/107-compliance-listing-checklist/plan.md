@@ -129,7 +129,7 @@
 | 诊断开关 / 诊断面板的调试入口 | 壳层（`103`/`101`） | release 构建 UI 检索（无入口） | ⬜ |
 | 骨架期自检载荷与调试端点（`/facts`、`/log`） | `entry/src/main/resources/rawfile/selfcheck.js`（现为**唯一**可读回通道） | release 产物内该文件与端点**不存在** | ⬜ Phase 3（Phase 1–2 必须保留） |
 | 调试用启动参数通道（`probeFlags`） | `EntryAbility.onCreate` 读 `want.parameters` | release 构建**屏蔽**该读取（或忽略） | ⬜ |
-| 样例工程/探针 Ability | 独立工程（`_test/test_node_probe`，包名 `org.fellow99.test.NodeProbe`） | 不在发布物依赖闭包内 + 安装前 force-stop（它占固定端口） | ⬜ 隔离声明 |
+| 样例工程/探针 Ability | 独立工程（`ohos-node-bridge/samples/minimal-app`，包名 `org.fellow99.nodebridge.sample`） | 不在发布物依赖闭包内 + 安装前 force-stop（它占固定端口） | ⬜ 隔离声明 |
 | 签名材料样本 / 本地签名文件 | 仓库根 `signing.debug.local.json.sample`、`build-profile.json5` 本地改动 | 不入库 + 不进发布物 | ✅ 现状（T3） |
 
 ### 4.7 安装/授权事实（写入材料，`spec.md` §4.3）
