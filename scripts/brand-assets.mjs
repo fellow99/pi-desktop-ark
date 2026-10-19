@@ -12,8 +12,8 @@
  *
  * | 文件 | 硬校验 | 用途 |
  * |---|---|---|
- * | `logo-1024-with-bg.png` | 1024×1024 且 **minAlpha == 255**（真不透明） | 应用级图标（`AppScope` 的 `app_icon`、模块 `icon`） |
- * | `logo.png` | 含透明像素（**minAlpha < 255**） | 启动图标 `startIcon`（系统允许透明） |
+ * | `logo.png` | 200×200、含透明像素 | **应用级图标与模块图标**（`AppScope` 的 `app_icon`、模块 `icon`）：由本脚本放大到 1024² 并在**白底**上合成（应用级图标必须不透明）；也用于启动图标 `startIcon`（512²，保留透明） |
+ * | `logo-1024-with-bg.png` | 1024×1024 且 **minAlpha == 255** | 不再使用（保留物料；若将来要回到"预合成"路线可复用） |
  *
  * 物料缺失 / 尺寸不符 / 透明度不符 / `ffmpeg` 不可用 ⇒ **一律硬失败**，绝不静默产出无品牌包。
  *
@@ -43,17 +43,19 @@ const DEFAULT_ASSETS = path.resolve(PROJECT_ROOT, '..', 'assets');
 const TARGETS = [
   {
     rel: 'AppScope/resources/base/media/app_icon.png',
-    source: 'logo-1024-with-bg.png',
+    source: 'logo.png',
     size: 1024,
     opaque: true,
-    why: '应用级图标（app.json5 的 $media:app_icon）：必须 1024² 且无 alpha'
+    flatten: '#FFFFFF',
+    why: '应用级图标（app.json5 的 $media:app_icon）：物料 = assets/logo.png，放大到 1024² 并合成白底（必须无 alpha）'
   },
   {
     rel: 'entry/src/main/resources/base/media/icon.png',
-    source: 'logo-1024-with-bg.png',
+    source: 'logo.png',
     size: 1024,
     opaque: true,
-    why: '模块图标（module.json5 的 $media:icon）：与应用级图标同源'
+    flatten: '#FFFFFF',
+    why: '模块图标（module.json5 的 $media:icon）：与应用级图标同源同参'
   },
   {
     rel: 'entry/src/main/resources/base/media/startIcon.png',
@@ -110,8 +112,13 @@ function generate(target, assetsDir) {
   if (header.width !== header.height) die(`物料必须是正方形：${src} = ${header.width}×${header.height}`);
 
   const alpha = minAlpha(src);
-  if (target.opaque && alpha !== 255) {
-    die(`物料「${target.source}」要求不透明（minAlpha 必须 255），实际 minAlpha=${alpha}`);
+  /*
+   * `flatten` = 由本脚本在**不透明底色**上合成：此时物料允许带 alpha（`logo.png` 就是带透明通道的
+   * 200² 源图），不透明性由 generate() 的 overlay+format=rgb24 保证，产物的 colorType 会再断言一次。
+   */
+  if (target.opaque && !target.flatten && alpha !== 255) {
+    die(`物料「${target.source}」要求不透明（minAlpha 必须 255），实际 minAlpha=${alpha}；`
+      + '若物料本身带透明通道，请给该目标配 flatten 底色');
   }
   if (!target.opaque && alpha === 255) {
     die(`物料「${target.source}」要求含透明像素（minAlpha < 255），实际全不透明 ⇒ 用错物料`);
@@ -122,7 +129,11 @@ function generate(target, assetsDir) {
   const args = [
     '-y', '-v', 'error',
     '-i', src,
-    '-vf', `scale=${target.size}:${target.size}:flags=lanczos`,
+    '-vf', target.flatten
+      ? `color=c=${target.flatten}:s=${target.size}x${target.size}[bg];`
+        + `[0:v]scale=${target.size}:${target.size}:flags=lanczos:force_original_aspect_ratio=decrease[fg];`
+        + '[bg][fg]overlay=(W-w)/2:(H-h)/2,format=rgb24'
+      : `scale=${target.size}:${target.size}:flags=lanczos`,
     '-pix_fmt', pixFmt,
     '-fflags', '+bitexact', '-flags', '+bitexact', '-map_metadata', '-1',
     '-frames:v', '1', '-f', 'image2', '-c:v', 'png', out
