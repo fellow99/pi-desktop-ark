@@ -766,6 +766,13 @@ async function rebuildPiWebInto(opts) {
 
   const srcNext = path.join(opts.piWeb, '.next');
   const dstNext = path.join(opts.from, '.next');
+  /*
+   * ⚠️ 必须先**清空**目标 `.next` 再镜像：增量覆盖会留下上一次构建的 chunk 与
+   * `page_client-reference-manifest`/HTML 里指向的旧 chunk 名 —— 实测症状是
+   * 「服务端路由已是新的，但页面加载的仍是旧 chunk」（2026-10-19，选择器补丁 0006）。
+   */
+  fs.rmSync(dstNext, { recursive: true, force: true });
+  console.log(`              [mirror] 已清空旧目标：${dstNext}`);
   const skip = (p) => {
     const base = path.basename(p);
     if (base === 'cache' || base === 'dev') return true;
