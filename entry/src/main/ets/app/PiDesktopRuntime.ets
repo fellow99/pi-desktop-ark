@@ -209,7 +209,9 @@ export class PiDesktopRuntime {
    * 启动后端并等待可用。
    *
    * @param context UIAbilityContext
-   * @param flags Node 参数；`--jitless` 只用于诊断（关 WASM ⇒ Next 的 WASM SWC 与 undici 的 llhttp 全废）
+   * @param flags Node 参数（由 `common/NodeMode.ets` 按形态给出：jit ⇒ `--no-verify-heap`；
+   *   compat ⇒ 追加 `--jitless`）。位置由库保证：`flags` 全部排在 `scriptPath` **之前**，
+   *   放进 `options.argv` 之后会被当成脚本参数（`node_bridge.c:1040-1056`）。
    * @returns 人读状态串（同时写入状态机；失败串里必须能看出**下一步该干什么**）
    */
   async launch(context: common.UIAbilityContext, flags: string): Promise<string> {

@@ -42,7 +42,8 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import {
   CROP_RULES,
@@ -53,6 +54,9 @@ import {
   ruleMatchesDir,
   ruleMatchesFile
 } from './crop-rules.mjs';
+
+import { applyJitlessShape } from './jitless-shape.mjs';
+
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** 项目根 = scripts/ 的上一级 */
@@ -98,7 +102,7 @@ const TAR_ROOT = 'pi-web';
  * `payload/README.md` 刻意不投放（文档不进载荷）。
  */
 const APP_PAYLOAD_DIR = path.join(PROJECT_ROOT, 'payload');
-const APP_PAYLOAD_ENTRIES = ['pi-web-launch.js', 'env.js', 'extensions', 'skills', 'config'];
+const APP_PAYLOAD_ENTRIES = ['pi-web-launch.js', 'env.js', 'extensions', 'skills', 'config', 'jitless'];
 
 // ── 命令行解析 ────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
@@ -1041,6 +1045,16 @@ function collectAppPayloadFiles(appDir) {
       continue;
     }
     for (const child of walkTree(abs).filter((f) => f.error === undefined)) {
+      /*
+       * 108-jitless：自检脚本**不进发布归档**。
+       * 理由：它们会在临时目录里造 `node_modules`、起本地 HTTP 服务，属开发期工具；
+       * 打进载荷只是把几十 KB 可执行测试代码送到用户设备（无用且扩大攻击面）。
+       * 源码仍在 `payload/jitless/selftest/`（PC 侧跑 TC-108-xx 用）。
+       *
+       * ⚠️ `child.rel` 是**相对 entry 目录**的路径（不含 entry 名），所以这里判 `selftest/`
+       * 且 entry 必须是 jitless —— 写成 `jitless/selftest/` 永远命中不了（本轮踩过）。
+       */
+      if (entry === 'jitless' && child.rel.startsWith('selftest/')) continue;
       files.push({ rel: `${entry}/${child.rel}`, abs: child.abs, bytes: child.size });
     }
   }
@@ -1214,6 +1228,12 @@ async function main() {
     console.log(`库载荷三件  : 已投放 ${bridge.files.length} 个（${BRIDGE_PAYLOAD_FILES.join(' / ')}）`);
     await stageBridgeFiles(appPayload.files, target, '投放应用载荷');
     console.log(`应用载荷覆盖: 已投放 ${appPayload.files.length} 个（${APP_PAYLOAD_ENTRIES.join(' / ')}）`);
+    /*
+     * 108-jitless：无 ACL 形态的载荷改造（`next.config.ts → .mjs`、`undici`/`photon` 条件入口）。
+     * 放在**投放完覆盖层之后**：它要处理的是载荷树本身，与覆盖层无关；
+     * 放在打包之前：改完必须被 `writeTarGz` 打进去（运行期不再改文件，否则幂等键会变）。
+     */
+    const jitlessReadonly = await applyJitlessShape(target, PROJECT_ROOT, opts);
     const readmePath = path.join(target, 'PAYLOAD_README.md');
     await fsp.writeFile(readmePath, payloadReadme(opts.route, stats.copiedFiles, stats.copiedBytes), 'utf8');
     const resultFiles = walkTree(target).filter((f) => f.error === undefined);
@@ -1239,7 +1259,8 @@ async function main() {
       bridgeStaged: bridge.files.map((f) => f.rel),
       appPayloadStaged: appPayload.files.map((f) => f.rel),
       bootstrap: path.join(target, BRIDGE_PAYLOAD_FILES[0]),
-      bootstrapPresent: fs.existsSync(path.join(target, BRIDGE_PAYLOAD_FILES[0]))
+      bootstrapPresent: fs.existsSync(path.join(target, BRIDGE_PAYLOAD_FILES[0])),
+      jitless: jitlessReadonly
     };
   } else {
     const stage = assertWritableTarget(stageDir, opts.out);
@@ -1254,6 +1275,15 @@ async function main() {
     await stageBridgeFiles(appPayload.files, tarRoot, '入归档');
     applyWebBranding(tarRoot);
     console.log(`应用载荷覆盖: 已入归档 ${appPayload.files.length} 个（${APP_PAYLOAD_ENTRIES.join(' / ')}）`);
+    /*
+     * 108-jitless：无 ACL 形态的载荷改造（`next.config.ts → .mjs`、`undici`/`photon` 条件入口）。
+     * 必须在**打包之前**（运行期不再改载荷树，否则 sha256 幂等键每次冷启都会变）：
+     *   · 归档里不能有 `next.config.ts`（否则 Next 启动期走 SWC-WASM ⇒ 无 JIT 设备直接起不来）；
+     *   · `undici.install()` 会覆写 `globalThis.fetch`，只能靠条件入口挡住。
+     */
+    const jitless = await applyJitlessShape(tarRoot, PROJECT_ROOT, opts);
+    console.log(`jitless 改造 : 配置=${jitless.nextConfig.via}；undici ${jitless.undici.length} 个、`
+      + `photon ${jitless.photon.length} 个包已条件化`);
     console.log(`→ 打包 tar.gz：${stage} → ${DEFAULT_TAR}`);
     const tarFiles = await writeTarGz(stage, DEFAULT_TAR, opts);
     const sha = await sha256File(DEFAULT_TAR);
@@ -1314,7 +1344,9 @@ async function main() {
       resfileBootstrap,
       resfileBootstrapPresent: fs.existsSync(resfileBootstrap),
       tarRoot: `${TAR_ROOT}/`,
-      entry: entryAbs,
+      appPayloadStaged: appPayload.files.map((f) => f.rel),
+      // NFR-108-004：报告里必须留下"哪些包被条件化、配置怎么生成的"，否则事后无法审计
+      jitless,
       entryPresent,
       cropCheck,
       archiveCheck: readable,

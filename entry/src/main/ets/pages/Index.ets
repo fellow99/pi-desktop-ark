@@ -31,6 +31,8 @@ struct Index {
   @State lastError: string = '';
   @State appDebugOpen: boolean = false;
   @State diagText: string = '';
+  /** 108-jitless：运行形态与判定依据（`mode=compat（依据：ACL 探测…）`），进「App调试」弹窗 */
+  @State nodeModeText: string = '';
   private controller: webview.WebviewController = new webview.WebviewController();
   private launched: boolean = false;
   /** 历史只清一次（⑧）；清除失败也记日志，不静默 */
@@ -59,12 +61,27 @@ struct Index {
 
     const ctx: common.UIAbilityContext = this.abilityContext();
     const flags: string | undefined = AppStorage.get<string>('nodeFlags');
-    const effective: string = flags !== undefined ? flags : '--no-verify-heap';
+    /*
+     * 108-jitless：回退值**必须按形态推导**，不能再写死 `--no-verify-heap`。
+     * 万一 `nodeFlags` 缺失（onCreate 抛异常等），写死的那串会让**无 ACL 设备按 JIT 启动**
+     * —— 那不是"降级"，是启动即崩（SIGABRT）。规则与 `NodeMode.flags()` 同一套，
+     * 数据源是同一个 AppStorage（形态判定只有一处，见 `common/NodeMode.ets`）。
+     */
+    const fallbackMode: string = AppStorage.get<string>('nodeMode') ?? '';
+    const fallbackFlags: string = fallbackMode === 'compat'
+      ? '--no-verify-heap --jitless'
+      : '--no-verify-heap';
+    const effective: string = flags !== undefined ? flags : fallbackFlags;
+    // 108-jitless：把**运行形态与依据**带进状态串（只在 logs/诊断里看得到是不够的：
+    // 「为什么这台设备是 compat」必须在界面上可归因，否则用户只看到"变慢"）
+    const mode: string = AppStorage.get<string>('nodeMode') ?? 'unknown';
+    const modeReason: string = AppStorage.get<string>('nodeModeReason') ?? '（未判定）';
+    this.nodeModeText = 'mode=' + mode + '（' + modeReason + '）';
 
     this.status = UIState.LAUNCHING;
-    this.stage = '正在启动（flags=' + effective + '）';
-    this.detail = '正在启动 Node / pi-web（flags=' + effective + '）…';
-    Log.info('launch 开始：flags=' + effective);
+    this.stage = '正在启动（flags=' + effective + '｜mode=' + mode + '）';
+    this.detail = '正在启动 Node / pi-web（flags=' + effective + '｜mode=' + mode + '）…';
+    Log.info('launch 开始：flags=' + effective + ' mode=' + mode + ' 依据=' + modeReason);
 
     PiDesktopRuntime.getInstance().launch(ctx, effective).then((result: string) => {
       const runtime: PiDesktopRuntime = PiDesktopRuntime.getInstance();
@@ -276,6 +293,13 @@ struct Index {
         .fontSize(12)
         .fontColor(Color.Gray)
         .width('100%')
+      if (this.nodeModeText.length > 0) {
+        // 108-jitless：形态与判定依据必须可见（compat 形态下标明显变慢，用户要能知道为什么）
+        Text('运行形态：' + this.nodeModeText)
+          .fontSize(12)
+          .fontColor(Color.Gray)
+          .width('100%')
+      }
       Text(this.detail)
         .fontSize(12)
         .fontColor(Color.Gray)

@@ -1,6 +1,7 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { Log } from '../common/Constants';
+import * as NodeMode from '../common/NodeMode';
 import { WindowState } from '../common/WindowState';
 import { PiDesktopRuntime } from '../app/PiDesktopRuntime';
 
@@ -26,27 +27,48 @@ export default class EntryAbility extends UIAbility {
 
     // F3（合规 G9）：`probeFlags` 是一个**调试通道**，release 构建里必须不存在。
     // 判定依据 = 应用自己的 debug 标志（`applicationInfo.debug`，由构建器写入；release 恒为 false）。
-    let flags: string = '--no-verify-heap';
     const debugBuild: boolean = this.context.applicationInfo.debug;
+    const params: Record<string, Object> | undefined = want.parameters;
+
+    /*
+     * 108-jitless：先定**运行形态**（jit / compat），再定 flags。
+     *
+     * 为什么不能固定 `--no-verify-heap`：没有 ACL 的设备上 V8 走 JIT 会直接 SIGTRAP/SIGABRT
+     * （真机实测：`--jitless` 之外没有第二条活路），而有 ACL 时带 `--jitless` 又白白损失 7–10×。
+     * 形态判定与依据见 `common/NodeMode.ets`（顺序：probeFlags > piNodeMode > 偏好设置 > ACL 探测）。
+     */
+    const decision: NodeMode.NodeModeDecision = NodeMode.resolve(this.context, debugBuild, params);
+    let flags: string = decision.flags();
+    /*
+     * probeFlags 覆盖：直接给整串 Node 参数，**优先级最高**（既有诊断通道，行为不变）。
+     * 注意它会让"形态"与"实际 flags"脱钩（例如 probeFlags 里没有 `--jitless` 但是 compat 形态），
+     * 所以覆盖时必须把 mode 标成 `custom` 并把真实 flags 写进依据 —— 否则诊断面板会说反话。
+     */
+    let modeForUi: string = decision.mode;
+    let reasonForUi: string = decision.reason;
     if (debugBuild) {
-      // debug 构建：保持原有行为不变（命令行 `--ps probeFlags "…"` 可覆盖 flags）
-      const params: Record<string, Object> | undefined = want.parameters;
       if (params !== undefined) {
         const raw: Object | undefined = params['probeFlags'];
         if (raw !== undefined) {
           const s: string = raw as string;
           if (s.length > 0) {
             flags = s;
+            modeForUi = 'custom';
+            reasonForUi = '调试参数 probeFlags 直接给出 flags=' + s
+              + '（形态判定结果 ' + decision.mode + ' 已被绕过）';
           }
         }
       }
     } else {
-      // release：**忽略**该参数，并留下一条可查的说明（不是静默丢弃）
-      Log.info('probeFlags 调试通道在 release 构建中已禁用（applicationInfo.debug=false）：'
-        + 'want.parameters 一律忽略，flags 固定为 ' + flags);
+      // release：**忽略**调试参数，并留下一条可查的说明（不是静默丢弃）
+      Log.info('probeFlags / piNodeMode 调试通道在 release 构建中已禁用（applicationInfo.debug=false）：'
+        + 'want.parameters 一律忽略，形态由偏好设置/ACL 探测决定');
     }
     AppStorage.setOrCreate<string>('nodeFlags', flags);
-    Log.info('onCreate flags=' + flags + ' debug=' + debugBuild + ' filesDir=' + this.context.filesDir);
+    AppStorage.setOrCreate<string>('nodeMode', modeForUi);
+    AppStorage.setOrCreate<string>('nodeModeReason', reasonForUi);
+    Log.info('onCreate flags=' + flags + ' mode=' + modeForUi + '（依据：' + reasonForUi + '）'
+      + ' debug=' + debugBuild + ' filesDir=' + this.context.filesDir);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {

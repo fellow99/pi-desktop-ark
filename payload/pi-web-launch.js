@@ -691,6 +691,28 @@ async function main() {
   log(`平台事实：platform=${process.platform} arch=${process.arch} execPath=${process.execPath}`
     + `（execPath 只用于日志，绝不参与任何重启逻辑）`);
 
+  /*
+   * 108-jitless：**纯 JS 兼容层必须在这里装**（任何 Next 代码被 require 之前）。
+   *
+   * 为什么顺序是承重的：无 ACL 时 V8 以 `--jitless` 运行 ⇒ `WebAssembly` 不存在 ⇒
+   *   ① `node:http` 的惰性 undici getter 一旦被读到，就会实例化 WASM 版 llhttp 并抛错；
+   *   ② Next 启动期会用 SWC 转译 `next.config.ts`（载荷里 SWC 只有 WASM 版）；
+   *   ③ `undici.install()`（Next instrumentation 与 pi SDK 都会调）会把 `globalThis.fetch`
+   *      换成 WASM 版实现。
+   * 兼容层只做"WASM 不存在时"的三件事（封印 getter / 纯 JS fetch 垫片 / 事实入日志），
+   * WASM 可用时**一个动作都不做**（有 ACL 的设备行为不变）。
+   * 入口签名与三态日志见 `payload/jitless/index.js`；策略与取证见 `docs/108-jitless-方案决策.md`。
+   */
+  let jitless = { active: false };
+  try {
+    jitless = require('./jitless').installIfNeeded((line) => log(line));
+  } catch (err) {
+    // 装不上也要继续：随后的真实失败（Next 起不来 / fetch 抛错）会给出更准确的现场
+    logError(`jitless 兼容层安装失败（继续启动，等真实错误暴露）：${describeError(err)}`);
+  }
+  log(`jitless 兼容层：active=${jitless.active === true}`
+    + `（WebAssembly=${typeof WebAssembly}；active=false 表示有 JIT 可用、按现役形态运行）`);
+
   const entryHint = process.env.NODE_BRIDGE_ENTRY || '';
   const payloadRoot = resolvePayloadRoot(entryHint);
 
