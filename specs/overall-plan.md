@@ -15,7 +15,7 @@
 | 运行时 | Node **v24.2.0**（`platform=openharmony`、`modules=137`），产物锁在 `ohos-node-bridge/runtime.lock.json` |
 | 上游载荷 | `pi-web`（Next 16.3.8 非 standalone）+ `pi` agent；设备侧 SWC 只能走 WASM |
 | 设备 | HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / API 26 / OpenHarmony-7.0.0.105 / arm64-v8a；`2in1` + `tablet` |
-| 权限 | 声明面 **19** `requestPermissions` + 2 `definePermissions` + `taskKeeping`；**现役 1 项 ACL**（另 5 项 2026-10-19 撤销，见 `docs/001-能力复刻评估.md` REV-5·REV-6 与 `docs/ACL-无ACL评估.md`） |
+| 权限 | 声明面 **21** `requestPermissions` + 2 `definePermissions` + `taskKeeping`；**现役 1 项 ACL**（另 3 项撤销；文档/下载保留并改为点击时授权，见 REV-5·6·7） |
 | 已实证结论 | ACL 生效 ⇒ 无 `Cpp Crash`、`wasm.available/validate=true`、热循环 **6–9 ms/2e6**；端口冲突 ⇒ 整进程 abort；`dup2` 日志混流 |
 | 当前产物 | 签名 HAP **129,347,874 B**；载荷（`pi-dist`）**尚未接入**（`resfile/pi-web/` 仅 README） |
 | 构建链 | `scripts/build-bridge-har.sh` → `scripts/provision-runtime.sh` → `hvigorw assembleHap` → `hdc install -r` |
@@ -36,7 +36,7 @@
 | **A7 判据可证伪** | ✅ | `overall-test-cases.md` 全部用例带「看哪里」与基线数值；禁用的判据单独成节 |
 | **A8 单实例与随机端口** | ❌ | **端口写死 15577**（`Constants.ets:7`）；`launchType` 未显式声明 ⇒ 两条都必须在 Phase 1 落地（这是与本宪法冲突的**唯一硬项**） |
 | **A9 异常兜底** | ❌ | `selfcheck.js` 未装 `uncaughtException`/`unhandledRejection`，`listen` 无 `error` 处理 ⇒ 端口冲突仍会 abort（✅ 已实测过该后果） |
-| **A10 声明面 ≠ 授权面** | ✅ | 19+2+`taskKeeping` 声明面（基线一致、撤销 5 项有依据）；Profile 含 ACL 并已装机验证；复验步骤已固化 |
+| **A10 声明面 ≠ 授权面** | ✅ | 21+2+`taskKeeping` 声明面（基线一致、撤销 3 项有依据）；Profile 含 ACL 并已装机验证；复验步骤已固化 |
 
 **结论**：A8/A9 是「**已知与宪法冲突、且已实测会致命**」的两项，属 Phase 1 的**必做**（不是「优化项」）；A5/A6 是「原则成立但实现欠账」，随加载页/诊断面板与宿主能力一并补齐。
 

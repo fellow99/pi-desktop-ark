@@ -8,8 +8,8 @@
 
 | 项 | 内容 | 与 hos 的关系 |
 | --- | --- | --- |
-| `requestPermissions` | **19 项**：`web_engine` 的 23 项 + `KEEP_BACKGROUND_RUNNING`，**已撤销 5 项**（`READ_PASTEBOARD`、`READ_WRITE_{DESKTOP,DOCUMENTS,DOWNLOAD}_DIRECTORY`、`FILE_ACCESS_PERSIST`，见 §1.1） | ✅ 基线逐项一致，撤销项有依据 |
-| 其中带 `reason` + `usedScene` | **4 项**（`EntryAbility` / `inuse`） | ✅ 文案取自 `web_engine/src/main/resources/{base,zh_CN,en_US}`，**逐字节一致** |
+| `requestPermissions` | **21 项**：`web_engine` 的 23 项 + `KEEP_BACKGROUND_RUNNING`，**已撤销 3 项**（`READ_PASTEBOARD`、`READ_WRITE_DESKTOP_DIRECTORY`、`FILE_ACCESS_PERSIST`）；**保留** `READ_WRITE_{DOCUMENTS,DOWNLOAD}_DIRECTORY`（normal 级、无 ACL，点 Tab 时授权） | ✅ 基线逐项一致，撤销/保留项均有依据 |
+| 其中带 `reason` + `usedScene` | **6 项**（`EntryAbility` / `inuse`） | ✅ 文案取自 `web_engine/src/main/resources/{base,zh_CN,en_US}`，**逐字节一致** |
 | `definePermissions` | `LOCK_WINDOW_CURSOR`、`kernel.ALLOW_WRITABLE_CODE_MEMORY` | ✅ 一致（受限权限两处成对出现） |
 | Ability 后台模式 | `EntryAbility.backgroundModes = ["taskKeeping"]` | ✅ 与 `electron` 模块一致 |
 
@@ -22,14 +22,14 @@
 > 探针实测（`ohos-node-bridge/docs/000-工程规划.md` §D.8）：声明 `kernel.EXEMPT_ANONYMOUS_EXECUTABLE_MEMORY`
 > 等**开放权限不能替代**第 1 项 —— 仍 SIGTRAP。故第 1 项是刚性前置。
 
-**2026-10-19 撤销五项**（剪贴板/桌面取证：`docs/001-能力复刻评估.md` REV-5；用户目录/持久化：REV-6；零 ACL 评估：`docs/ACL-无ACL评估.md`）：
+**2026-10-19 撤销三项 / 保留两项**（取证：`docs/001-能力复刻评估.md` REV-5·REV-6·REV-7；零 ACL 评估：`docs/ACL-无ACL评估.md`）：
 
 | 权限 | 等级 | 撤销依据 |
 | --- | --- | --- |
 | `ohos.permission.READ_PASTEBOARD` | `system_basic` + `user_grant` ⇒ 需 ACL | 页面粘贴由 **ArkWeb 自己**读剪贴板：应用侧 0 处 `@ohos.pasteboard` 调用，pi-web 只用 DOM `paste` 事件；真机该权限 `grantStatus=-1`（从未授予）时 Ctrl+V 仍能粘贴 |
 | `ohos.permission.READ_WRITE_DESKTOP_DIRECTORY` | `system_basic` + `user_grant` ⇒ 需 ACL | 桌面目录只是「工作区选择器」的一个根；不申请只少一个 Tab（最终根清单只留「沙箱」） |
-| `ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY` | `normal` + `user_grant` ⇒ **不需 ACL** | 同上；用户目录一律不再直访（REV-6） |
-| `ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY` | `normal` + `user_grant` ⇒ **不需 ACL** | 同上（REV-6） |
+| `ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY` | `normal` + `user_grant` ⇒ **不需 ACL** | ✅ **保留**（REV-7）：点「文档」Tab 时经 `perm.request` 弹授权窗，授予后列举 |
+| `ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY` | `normal` + `user_grant` ⇒ **不需 ACL** | ✅ **保留**（REV-7）：同上（「下载」Tab） |
 | `ohos.permission.FILE_ACCESS_PERSIST` | `normal` + `system_grant` | 随之不再调用 `fileShare.persistPermission`（REV-6） |
 
 ## 2. 装机与授权：两次实测（2026-10-16，HAD-W24）

@@ -25,7 +25,7 @@
 
 ## 2. 现役权限面（本次定稿）
 
-- `requestPermissions`：**19 项**（其中 4 项带 `reason` + `usedScene`）
+- `requestPermissions`：**21 项**（其中 6 项带 `reason` + `usedScene`）
 - `definePermissions`：`LOCK_WINDOW_CURSOR`、`kernel.ALLOW_WRITABLE_CODE_MEMORY`
 - Ability 后台模式：`taskKeeping`
 - **现役 ACL 只有 1 项**：`ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY`
@@ -36,8 +36,8 @@
 |---|---|---|
 | `READ_PASTEBOARD` | `system_basic`（需 ACL） | 页面粘贴由 ArkWeb 自行读剪贴板；应用侧 0 处 `@ohos.pasteboard` 调用。真机：该权限 `grantStatus=-1`（从未授予）时 Ctrl+V 仍可粘贴（REV-5） |
 | `READ_WRITE_DESKTOP_DIRECTORY` | `system_basic`（需 ACL） | 桌面目录只是选择器的一个根；不申请只少一个 Tab |
-| `READ_WRITE_DOCUMENTS_DIRECTORY` | `normal`（无需 ACL） | 同上；工作区改为只在沙箱内 |
-| `READ_WRITE_DOWNLOAD_DIRECTORY` | `normal`（无需 ACL） | 同上 |
+| `READ_WRITE_DOCUMENTS_DIRECTORY` | `normal`（无需 ACL） | **2026-10-19 起重声明并保留**：点「文档」Tab 时弹授权窗后列举（REV-7） |
+| `READ_WRITE_DOWNLOAD_DIRECTORY` | `normal`（无需 ACL） | **同上**：点「下载」Tab 时弹授权窗后列举（REV-7） |
 | `FILE_ACCESS_PERSIST` | `normal`（`system_grant`） | 随之不再调用 `fileShare.persistPermission`；选择器 URI 仅本会话有效 |
 
 > 例外的“反向副作用”：撤销后**装机不再受 Profile 里那几条 ACL 的约束**（历史 `code:9568289` 的触发点只剩 JIT 一项）。
