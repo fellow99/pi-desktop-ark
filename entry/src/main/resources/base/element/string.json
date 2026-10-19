@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "Pi Desktop V2 主模块"
+      "value": "Pi Desktop Ark 主模块"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "Pi Desktop V2"
+      "value": "Pi Desktop Ark"
     },
     {
       "name": "EntryAbility_label",
-      "value": "Pi Desktop V2"
+      "value": "Pi Desktop Ark"
     },
     {
       "name": "inherit_parent_permission",

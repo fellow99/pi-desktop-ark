@@ -5,7 +5,7 @@ import { PiDesktopRuntime, UIState } from '../app/PiDesktopRuntime';
 import { HostCapabilities } from '../host/HostCapabilities';
 
 /**
- * Pi Desktop V2 主界面。
+ * Pi Desktop Ark 主界面。
  *
  * 形态（工程规划 §5 第 1/11/12 条 · §5.10 ⑥⑦⑧⑨）：
  *   ① 先加载**应用内** boot 页（`$rawfile('boot.html')`）—— 必须有本地首屏，否则白屏无法诊断；

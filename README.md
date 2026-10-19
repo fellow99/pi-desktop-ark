@@ -8,7 +8,7 @@
 | 项 | 值 |
 | --- | --- |
 | 版别 | **HarmonyOS Edition**（`pi-desktop-ark`） |
-| 应用名（桌面/窗口标签）/ 包名 | Pi Desktop V2 / `org.fellow99.pi.PiDesktopArk` |
+| 应用名（桌面/窗口标签）/ 包名 | Pi Desktop Ark / `org.fellow99.pi.PiDesktopArk` |
 | 目标设备 | `2in1` / `tablet`（不做 phone） |
 | 后端 | `@fellow99/node-bridge` 起的 Node v24.2.0（进程内，`dlopen` + `node::Start`） |
 | 前端 | ArkWeb 加载 `http://127.0.0.1:<port>/`（页面由本地服务渲染，同源零 CORS） |

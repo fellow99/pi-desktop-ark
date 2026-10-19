@@ -1,7 +1,7 @@
 # 规格文档索引 —— `pi-desktop-ark`
 
 **项目名称：** `pi-desktop-ark` · **定位名：** **HarmonyOS Edition**（HarmonyOS 版；对应 `pi-desktop-hos` = Electron on HarmonyOS Edition）
-**应用名 / 包名：** **Pi Desktop V2** / `org.fellow99.pi.PiDesktopArk`
+**应用名 / 包名：** **Pi Desktop Ark** / `org.fellow99.pi.PiDesktopArk`
 **需求：** **000-scaffold 工程搭建** · **规范文档存放目录：** `specs/`
 **版本：** `v0.1`（规划 2026-10-16；Phase 0 骨架 + 关键实证已完成，Phase 1 进行中）
 **目标设备：** `2in1` / `tablet`（真机 HAD-W24 · 7.0.0.107(SP7C00E100R13P5) · OpenHarmony-7.0.0.105 · API 26 · arm64-v8a）；**不做 phone、不做 x86_64**

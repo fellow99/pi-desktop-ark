@@ -1,6 +1,6 @@
 # constitution.md —— `pi-desktop-ark` 项目宪法（应用宿主层原则）
 
-> 本文件是 **Pi Desktop V2**（`org.fellow99.pi.PiDesktopArk`）的**最高约束**：任何 `spec.md` / `plan.md` / 实现 / 评审都必须先过这一关。
+> 本文件是 **Pi Desktop Ark**（`org.fellow99.pi.PiDesktopArk`）的**最高约束**：任何 `spec.md` / `plan.md` / 实现 / 评审都必须先过这一关。
 > 原则不是发明的，而是从**已落地的代码**、**本工程真机实测**与**旧壳的失败经验**中抽取的（依据列在每条末尾）。
 
 | 项 | 值 |

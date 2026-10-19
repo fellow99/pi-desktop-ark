@@ -1,4 +1,4 @@
-# overall-spec.md —— Pi Desktop V2 整体规格（技术无关）
+# overall-spec.md —— Pi Desktop Ark 整体规格（技术无关）
 
 > 本文件只写「**要什么**」与「**怎么判定做到了**」，**不含**技术选型、框架名与文件路径（那些在 `TECH.md` / `ARCHITECTURE.md` / `STRUCTURE.md`）。
 > 需求关键字按 **RFC 2119**：**必须**（MUST）· **必须不**（MUST NOT）· **应**（SHOULD）· **可以**（MAY）。

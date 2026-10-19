@@ -57,7 +57,7 @@
 
 | 项 | 值 | 取证 |
 |---|---|---|
-| 应用 | `Pi Desktop V2` / `org.fellow99.pi.PiDesktopArk` / versionName `0.1.0` / versionCode `100` | ✅ `AppScope/app.json5` |
+| 应用 | `Pi Desktop Ark` / `org.fellow99.pi.PiDesktopArk` / versionName `0.1.0` / versionCode `100` | ✅ `AppScope/app.json5` |
 | 模块 API 口径 | `compatibleSdkVersion 5.0.5(17)`、`targetSdkVersion 6.1.1(24)`；`app.json5` 的 `minAPIVersion 17` / `targetAPIVersion 24` | ✅ `build-profile.json5`、`AppScope/app.json5`（⚠️ 与规划「API 26」口径的差异见 `STRUCTURE.md` §2.1） |
 | Node | **v24.2.0**（`platform=openharmony`、`arch=arm64`、`modules=137`、`v8 13.6.233.10-node.17`、`uv 1.51.0`、`undici 7.10.0`、`openssl 3.0.16`） | ✅ 本机 `/facts`（`docs/evidence/2026-10-16-acl-jit-verified.md`） |
 | 运行时产物锁 | `ohos-node-bridge/runtime.lock.json`：`libnode.so` SHA-256 `3019bf5f…51a1`、`libc++_shared.so` SHA-256 `388e0df2…b2f9` | ✅ 库 §D.9 + 本工程 HAP 内核对（规划 附录 B #2） |

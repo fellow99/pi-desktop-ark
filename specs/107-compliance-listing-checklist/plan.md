@@ -116,7 +116,7 @@
 | 项 | 现值 | 约束 |
 |---|---|---|
 | 包名 | `org.fellow99.pi.PiDesktopArk` | 改包名 ⇒ 证书/Profile/ACL 全套重来（宪法 A10） |
-| 应用名（label） | `Pi Desktop V2`（`AppScope/resources/base/element/string.json`） | 必须与备案名逐字一致（G7） |
+| 应用名（label） | `Pi Desktop Ark`（`AppScope/resources/base/element/string.json`） | 必须与备案名逐字一致（G7） |
 | 图标 | `$media:app_icon`（`AppScope/resources/base/media/app_icon.png`，存在） | 必须与提交材料图标一致 |
 | `versionCode` / `versionName` | `100` / `0.1.0` | 编码规则 `major*10000+minor*100+patch`；上架必须递增 |
 | 签名 | `build-profile.json5` 内为**调试**材料（本地未提交改动） | 发布必须另配发布证书/Profile（`FR-107-021`） |

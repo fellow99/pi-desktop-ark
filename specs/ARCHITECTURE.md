@@ -9,7 +9,7 @@
 ## 1. 分层与数据流
 
 ```
-┌─ HAP（Pi Desktop V2 / org.fellow99.pi.PiDesktopArk）───────────────────────────┐
+┌─ HAP（Pi Desktop Ark / org.fellow99.pi.PiDesktopArk）───────────────────────────┐
 │  entry 模块（唯一模块）                                                        │
 │                                                                              │
 │  ┌─ L1 ArkTS 宿主（本工程代码）──────────────────────────────────────────┐    │

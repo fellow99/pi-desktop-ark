@@ -4,7 +4,7 @@
   //（"does not comply with the SemVer specification"）。应用自身的对外版本号在
   // AppScope/app.json5 的 versionName / versionCode，与此处无关。
   "version": "1.0.0",
-  "description": "Pi Desktop V2 主模块（ArkWeb 渲染 + 进程内 Node 编排）",
+  "description": "Pi Desktop Ark 主模块（ArkWeb 渲染 + 进程内 Node 编排）",
   "main": "",
   "author": "fellow99",
   "license": "MIT",

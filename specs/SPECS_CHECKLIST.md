@@ -1,6 +1,6 @@
 # SPECS_CHECKLIST.md —— 规格文档完成度追踪
 
-> 工程：`pi-desktop-ark` · 应用名：**Pi Desktop V2** · 包名：`org.fellow99.pi.PiDesktopArk` · 需求：**000-scaffold 工程搭建**
+> 工程：`pi-desktop-ark` · 应用名：**Pi Desktop Ark** · 包名：`org.fellow99.pi.PiDesktopArk` · 需求：**000-scaffold 工程搭建**
 > 规范文档存放目录：`specs/` · 生成日期：**2026-10-16**
 > 权威规划文档：[`../docs/000-工程规划.md`](../docs/000-工程规划.md)（v0.1，**结论以它为准**）；运行时契约见库文档 [`../../ohos-node-bridge/docs/000-工程规划.md`](../../ohos-node-bridge/docs/000-工程规划.md) **§6**
 >

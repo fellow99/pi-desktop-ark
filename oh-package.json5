@@ -1,6 +1,6 @@
 {
   "modelVersion": "6.1.1",
-  "description": "Pi Desktop V2（HarmonyOS）—— 进程内 Node + pi-web 服务 + ArkWeb 渲染",
+  "description": "Pi Desktop Ark（HarmonyOS）—— 进程内 Node + pi-web 服务 + ArkWeb 渲染",
   "dependencies": {
     // 消费方接线（工程规划 §7.5 / 附录 G.8）：
     //   HAR 只带 ArkTS + NAPI 引导件，**不带** libnode.so（121 MB）；

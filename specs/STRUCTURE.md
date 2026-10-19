@@ -16,7 +16,7 @@ pi-desktop-ark/
 ├── AppScope/                                   # ✅ 应用级（非模块级）配置与资源
 │   ├── app.json5                               # ✅ 包名/版本/图标/API 版本（见 §2.1）
 │   └── resources/base/
-│       ├── element/string.json                 # ✅ app_name = "Pi Desktop V2"
+│       ├── element/string.json                 # ✅ app_name = "Pi Desktop Ark"
 │       └── media/app_icon.png                  # ✅ 应用图标（G7 三一致的图标来源）
 ├── build-profile.json5                         # ✅ 产品/签名指针（**签名材料不入库**，见 §2.2）
 ├── hvigorfile.ts                               # ✅ 签名注入（不覆盖 DevEco 写入的配置，只补指针）
@@ -87,7 +87,7 @@ pi-desktop-ark/
 | `bundleName` | `org.fellow99.pi.PiDesktopArk` | 包名；**签名证书与其绑定**，改包名 ⇒ ACL 必须重新申请（宪法 A10） |
 | `vendor` | `fellow99` | — |
 | `versionCode` / `versionName` | `100` / `0.1.0` | 编码规则 `major*10000 + minor*100 + patch`（对齐旧壳）；上架每次必须递增（G7） |
-| `icon` / `label` | `$media:app_icon` / `$string:app_name`（"Pi Desktop V2"） | 图标/命名/备案三一致的落点（G7） |
+| `icon` / `label` | `$media:app_icon` / `$string:app_name`（"Pi Desktop Ark"） | 图标/命名/备案三一致的落点（G7） |
 | `minAPIVersion` / `targetAPIVersion` | `17` / `24` | ⚠️ **与规划 §1 的「API 26」口径不一致**：真机实测 `const.ohos.apiversion = 26`（🔶 旧壳能力清单），但本工程 `targetAPIVersion` 写的是 **24**；`build-profile.json5` 的 `compatibleSdkVersion = 5.0.5(17)`、`targetSdkVersion = 6.1.1(24)`。Phase 1 需明确「API 26 只说设备，不说 targetSdk」的口径并写回规划（见 `overall-plan.md` 的开放问题） |
 
 ### 2.2 `build-profile.json5`（产品与签名指针）

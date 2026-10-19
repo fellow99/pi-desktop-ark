@@ -5,7 +5,7 @@ import { WindowState } from '../common/WindowState';
 import { PiDesktopRuntime } from '../app/PiDesktopRuntime';
 
 /**
- * Pi Desktop V2 主 Ability。
+ * Pi Desktop Ark 主 Ability。
  *
  * 起 Node 的时机（工程规划 §5.10 ⑪ / ⑫）：**先 `loadContent`，再起 Node**，
  * 且权限申请放在 `loadContent` 之后 —— 权限弹窗在无人点按的设备上会卡住启动屏（APP_INPUT_BLOCK）。
