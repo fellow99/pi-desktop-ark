@@ -75,10 +75,10 @@ index 41b2493..e02ba2d 100644
      rootPath: resolved,
 diff --git a/app/api/host/perm/route.ts b/app/api/host/perm/route.ts
 new file mode 100644
-index 0000000..4c1141c
+index 0000000..d97d516
 --- /dev/null
 +++ b/app/api/host/perm/route.ts
-@@ -0,0 +1,80 @@
+@@ -0,0 +1,100 @@
 +import { NextResponse } from "next/server";
 +import { join } from "path";
 +import { hasJsonContentType, isApiRequestAllowed } from "@/lib/request-security";
@@ -95,6 +95,9 @@ index 0000000..4c1141c
 + * 请求别的（例如 system_basic）权限 —— 那会变成"随便给任意权限弹窗"的后门。
 + */
 +export const dynamic = "force-dynamic";
++
++/** 产物标记：`assemble-payload` 用它判断载荷里的 .next 是否已包含本补丁。 */
++const PERM_FLOW_MARKER = "pi-hos-perm-request";
 +
 +const ALLOWED_PERMISSIONS = new Set([
 +  "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",
@@ -128,12 +131,29 @@ index 0000000..4c1141c
 +  // 用 eval("require") 是为了让打包器**不要**静态分析这个路径（它是运行期才存在的文件）。
 +  type HostShim = {
 +    invoke: (name: string, payload?: unknown, opts?: { timeoutMs?: number }) => Promise<unknown>;
++    useFileMailbox?: (dir: string) => { ok?: boolean; error?: string; detail?: string };
 +  };
 +  let host: HostShim;
 +  try {
 +    // eslint-disable-next-line no-eval
 +    const nodeRequire = eval("require") as NodeRequire;
 +    host = nodeRequire(join(process.cwd(), "host.js")) as HostShim;
++    /*
++     * ⚠️ 必须**就地接线信箱**：pi-web-launch 装的是 `<resfile>/pi-web/host.js` 那一份，
++     * 而这条路由 require 的是 `<payload>/pi-web/host.js` —— 两份是**不同的模块实例**，
++     * 上面那份的 mailbox 状态不会共享过来（实测症状：`transport-unavailable name=perm.request`）。
++     * `useFileMailbox` 对已存在目录是幂等的，这里按环境变量再接线一次即可。
++     */
++    const mailboxDir = process.env.PI_HOST_MAILBOX ?? "";
++    if (mailboxDir.length > 0 && typeof host.useFileMailbox === "function") {
++      const wired = host.useFileMailbox(mailboxDir);
++      if (wired?.ok !== true) {
++        return NextResponse.json(
++          { error: "mailbox-unavailable", detail: wired?.detail ?? wired?.error ?? "unknown" },
++          { status: 503 },
++        );
++      }
++    }
 +  } catch (error) {
 +    return NextResponse.json(
 +      { error: "host bridge unavailable", detail: String((error as Error)?.message ?? error) },
@@ -145,7 +165,7 @@ index 0000000..4c1141c
 +    // 用户在系统弹窗上点按的时间不可控 ⇒ 超时给足（库侧默认远小于此）。
 +    const result = (await host.invoke("perm.request", { permissions: [permission] }, { timeoutMs: 120000 })) as PermRequestResult;
 +    const granted = typeof result?.granted === "number" ? result.granted : 0;
-+    return NextResponse.json({ ok: true, permission, granted: granted > 0, result });
++    return NextResponse.json({ ok: true, marker: PERM_FLOW_MARKER, permission, granted: granted > 0, result });
 +  } catch (error) {
 +    const err = error as { error?: string; detail?: string; message?: string };
 +    return NextResponse.json(
