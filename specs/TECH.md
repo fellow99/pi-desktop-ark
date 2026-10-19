@@ -27,7 +27,7 @@
 | 数据面协议 | **同源 HTTP + SSE**：`/`（SPA）、`/api/*`、SSE、鉴权端点 | 前后端唯一通道 | 页面由本地服务渲染 ⇒ 天然同源、零 CORS、零头改写（✅ 上游源码事实，规划 §6.1）；宪法 A1 禁 preload/IPC 载体 |
 | 鉴权 | **路线 ① loopback 免密（首选）**；路线 ② 局域网 + 密码 + Cookie 注入（回退） | 本地服务访问控制 | ①：只监听 `127.0.0.1` + 不设 `PI_WEB_PASSWORD` ⇒ 上游直接放行（✅ `pi-web/proxy.ts:42-47`）；②：`v1.<exp>.<nonce>.<HMAC-SHA256(密码)>` 会话 cookie 对 `/api/*` 同样生效（✅ `proxy.ts:50-70`、`lib/web-auth.ts`），壳只做 Cookie 写入 |
 | 构建链 | **DevEco Studio 6.1 / command-line-tools `hvigorw` / ohos-sdk（API 26 设备）**，`useNormalizedOHMUrl: true`，`nativeLib.collectAllLibs: true` | 出 HAP | 与库同一条链（规划 §14.3）；OHM 归一化是必需项（否则跨 HAR 符号解析不一致）；module 级 `nativeLib` **不吃** `abiFilters`（✅ 踩坑） |
-| 签名 | **DevEco 生成的调试证书/Profile（与 `bundleName` 绑定）** + 含 3 项 ACL 的 Profile | 装机与 ACL 生效 | 自签 OpenHarmony 证书被 HarmonyOS 真机拒（`fail to verify pkcs7 file`，库 §D.7）⇒ 只能用 DevEco/AGC 链路；材料**不入库**（宪法 T3） |
+| 签名 | **DevEco 生成的调试证书/Profile（与 `bundleName` 绑定）** + 含 ACL 的 Profile（现役 1 项：`kernel.ALLOW_WRITABLE_CODE_MEMORY`） | 装机与 ACL 生效 | 自签 OpenHarmony 证书被 HarmonyOS 真机拒（`fail to verify pkcs7 file`，库 §D.7）⇒ 只能用 DevEco/AGC 链路；材料**不入库**（宪法 T3） |
 | 目标设备 | **2in1 / tablet，arm64-v8a**；真机 **HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / OpenHarmony-7.0.0.105 / API 26** | 运行目标 | 不做 phone、不做 x86_64（规划 §0.3/§1） |
 | 观测/取证 | **`hdc`**：`snapshot_display`（截图）、`uitest uiInput`（点按）、`rport`（日志回传）、`hilog`、`fport` + `curl /facts` `/log` | 真机判据 | 旧壳与本工程共同结论：`uitest dumpLayout` 在本机拿不到结果 ⇒ 判据改走 HTTP 端点（✅ 库 §D.8；规划 附录 A） |
 | host 侧脚本 | **Bash（Git-Bash）+ Node** | 构建/投放/取证 | 与库的 `tools/provision.mjs`（Node）统一；`hvigorw.bat` 经 `cmd //c` 调用 |

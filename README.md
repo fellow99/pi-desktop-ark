@@ -51,7 +51,7 @@ cmd //c "D:\oh-workspace\command-line-tools\bin\hvigorw.bat assembleHap --mode m
 | # | 事项 | 说明 |
 | --- | --- | --- |
 | 1 | **调试签名** | 已在 DevEco 为 `org.fellow99.pi.PiDesktopArk` 生成（证书与包名绑定）。材料写在 `build-profile.json5` 的 `signingConfigs` 里；也可改用 `signing.debug.local.json` + 环境变量覆盖 |
-| 2 | **JIT 的 ACL** | 声明面已配好（与 `pi-desktop-hos` 逐项一致：**24 项 requestPermissions + 2 项 definePermissions + `taskKeeping`**）。⚠️ **但 Profile 不含 ACL 时装机会被拒**（实测 `9568289 / PermissionName: ohos.permission.READ_PASTEBOARD`）——详见 [`docs/ACL配置.md`](docs/ACL配置.md)，那里给了「走 ACL」与「获批前先跑通」两条路径 |
+| 2 | **JIT 的 ACL** | 声明面 **19 项 requestPermissions + 2 项 definePermissions + `taskKeeping`**（基线取 `web_engine` 23 项 + `KEEP_BACKGROUND_RUNNING`，之后**收窄 5 项**：剪贴板 / 桌面 / 文档 / 下载 / 持久化授权，见 [`docs/001-能力复刻评估.md`](docs/001-能力复刻评估.md) REV-5·REV-6 与 [`docs/ACL-无ACL评估.md`](docs/ACL-无ACL评估.md)）。⚠️ **但 Profile 不含 ACL 时装机会被拒**（实测 `9568289 / PermissionName: ohos.permission.READ_PASTEBOARD`）——详见 [`docs/ACL配置.md`](docs/ACL配置.md)，那里给了「走 ACL」与「获批前先跑通」两条路径 |
 
 > **签名材料与 git**：DevEco 的「自动生成签名」会把证书路径与**本机加密口令**直接写进
 > `build-profile.json5`（该文件本身入库，所以会表现为**本地未提交改动** —— 请勿把它提交进仓库）。

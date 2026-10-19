@@ -191,7 +191,7 @@ entry/src/main/resources/                    # 随包（只读）
 | 5 | `ohos.permission.PRINT` | 开放 | 打印（旧壳能力面，当前未用） | `:56` |
 | 6 | `ohos.permission.PREPARE_APP_TERMINATE` | 开放 | 关停前回调（`onPrepareToTerminate`，规划 §5 第 13 条） | `:57` |
 | 7 | `ohos.permission.ACCESS_BIOMETRIC` | 开放 | 生物识别（旧壳能力面，当前未用） | `:58` |
-| 8 | `ohos.permission.FILE_ACCESS_PERSIST` | 开放（Profile 已授权） | 持久化文件访问（用户目录授权留存） | `:59` |
+| 8 | `ohos.permission.FILE_ACCESS_PERSIST` | **已撤销（2026-10-19，REV-6）** | 原：持久化文件访问（用户目录授权留存） | 已删除 |
 | 9 | `ohos.permission.PRIVACY_WINDOW` | 开放 | 隐私窗口/防截屏（当前未用） | `:60` |
 | 10 | `ohos.permission.WINDOW_TOPMOST` | 开放 | 窗口置顶（当前未用） | `:61` |
 | 11 | `ohos.permission.KEEP_BACKGROUND_RUNNING` | 开放 | 长时任务（`taskKeeping`，agent 长任务不被挂起） | `:64` |
@@ -203,9 +203,9 @@ entry/src/main/resources/                    # 随包（只读）
 | 17 | `ohos.permission.ACCELEROMETER` | 开放 | 传感器（旧壳能力面） | `:100` |
 | 18 | `ohos.permission.GET_FILE_ICON` | 开放 | 文件图标（选择器展示） | `:101` |
 | 19 | `ohos.permission.LOCK_WINDOW_CURSOR` | 开放 + `definePermissions` | 锁定光标（旧壳 Web 引擎需要） | `:102` / `:159` |
-| 20 | `ohos.permission.READ_PASTEBOARD` | ★ **ACL 2/3**（user_grant，运行期弹窗） | 剪贴板文本/图片粘贴到输入框 | `:104-113` |
-| 21 | `ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY` | 开放（带 reason；Profile 已授权） | 下载目录读写 | `:114-123` |
-| 22 | `ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY` | 开放（带 reason；Profile 已授权） | 文档目录读写 | `:124-133` |
+| 20 | `ohos.permission.READ_PASTEBOARD` | **已撤销（2026-10-19）**：原 ★ ACL 2/3，真机证明 ArkWeb 自行读剪贴板 | 页面粘贴（DOM `paste` 事件）不需应用侧读剪贴板 | 删除（原 `:104-113`） |
+| 21 | `ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY` | **已撤销（2026-10-19，REV-6）** | 原：下载目录读写 | 已删除 |
+| 22 | `ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY` | **已撤销（2026-10-19，REV-6）** | 原：文档目录读写 | 已删除 |
 | 23 | `ohos.permission.READ_WRITE_DESKTOP_DIRECTORY` | ★ **ACL 3/3**（user_grant） | 桌面目录读写（工作目录可能在此） | `:135-144` |
 | 24 | `ohos.permission.CUSTOM_SCREEN_CAPTURE` | 开放（带 reason） | 应用内截图 | `:145-154` |
 
@@ -216,8 +216,8 @@ entry/src/main/resources/                    # 随包（只读）
 
 | 面 | 内容 | 判据 |
 |---|---|---|
-| Profile 必须包含 | 3 项 ACL + 3 项目录/剪贴板授权 + `FILE_ACCESS_PERSIST`（共 6 项，✅ 2026-10-16 生成） | `hdc install -r` 成功；失败样例：`code:9568289 / PermissionName: ohos.permission.READ_PASTEBOARD` |
-| 运行期申请（`user_grant`） | 剪贴板、三个目录；**必须在首屏可见之后**申请（`APP_INPUT_BLOCK` 风险） | ⬜ Phase 1 实现 + 截图取证 |
+| Profile 必须包含 | 现役 **1 项 ACL**（`kernel.ALLOW_WRITABLE_CODE_MEMORY`）；目录授权与 `FILE_ACCESS_PERSIST` 已于 2026-10-19 全部撤销（Profile 保留旧条目无害） | `hdc install -r` 成功；历史失败样例：`code:9568289 / PermissionName: ohos.permission.READ_PASTEBOARD` |
+| 运行期申请（`user_grant`） | **本版已无**（剪贴板与三个目录均已撤销）；`perm.request` 能力保留给未来新增 `user_grant` 项 | ✅ 无需首屏后申请，`APP_INPUT_BLOCK` 风险随之消失 |
 | 拒绝后的行为 | 界面提示「未授权 + 去系统设置」；**不得**伪造成功 | ⬜ |
 
 ---

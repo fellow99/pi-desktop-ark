@@ -110,7 +110,7 @@ pi-desktop-ark/
 | `mainElement` / `pages` | `EntryAbility` / `$profile:main_pages` | 唯一入口 Ability + 路由表 |
 | `abilities[0]` | `EntryAbility`：`exported: true`、`backgroundModes: ["taskKeeping"]`、`startWindowIcon`/`startWindowBackground` | ⬜ 规划 §5 第 16 条要求 `launchType: singleton`，**当前未显式声明** |
 | `abilities[0].skills` | 仅 `entity.system.home` + `action.system.home` | ✅ G2：**不**声明 `entity.system.browsable` / `ohos.want.action.viewData` |
-| `requestPermissions` | **24 项**（`web_engine` 的 23 项 + `KEEP_BACKGROUND_RUNNING`），其中 **8 项**带 `reason` + `usedScene` | ✅ 与 `pi-desktop-hos` 逐项一致（脚本比对）；3 项 ACL 见 `docs/ACL配置.md` §1.1 |
+| `requestPermissions` | **19 项**（`web_engine` 的 23 项 + `KEEP_BACKGROUND_RUNNING`，**已撤销 5 项**：剪贴板 / 桌面 / 文档 / 下载 / 持久化授权），其中 **4 项**带 `reason` + `usedScene` | ✅ 基线逐项一致，撤销项见 `docs/001-能力复刻评估.md` REV-5·REV-6；现役 ACL 仅 1 项（`docs/ACL配置.md` §1.1） |
 | `definePermissions` | `LOCK_WINDOW_CURSOR`、`kernel.ALLOW_WRITABLE_CODE_MEMORY` | ✅ 与 `requestPermissions` **成对出现**（受限权限口径） |
 
 > 权限明细、分类与「声明面 ≠ 授权面」的两次装机实测见 [`../docs/ACL配置.md`](../docs/ACL配置.md) 与 [`overall-data-model.md`](overall-data-model.md) §5。

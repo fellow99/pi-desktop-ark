@@ -143,7 +143,7 @@
 
 - ✅ 实测：Profile 不含权限项时 `hdc install -r` 直接失败 `code:9568289 / PermissionName: ohos.permission.READ_PASTEBOARD`；含 6 项授权的 Profile 生成后 `install bundle successfully.`（`docs/ACL配置.md` §2.1/§2.2）。
 - 因此：**任何权限相关改动（增删项、改包名、改签名主体）都必须重走「申请 → 重新生成 Profile → 装机验证」**，装机成功本身即是「授权面就位」的判据。
-- 三项 ACL（`kernel.ALLOW_WRITABLE_CODE_MEMORY`、`READ_PASTEBOARD`、`READ_WRITE_DESKTOP_DIRECTORY`）是**刚性前置**，不得用开放权限替代（✅ 探针实测：声明开放权限仍 SIGTRAP）。
+- 现役 ACL 只有 **1 项**：`kernel.ALLOW_WRITABLE_CODE_MEMORY`（**刚性前置**，不得用开放权限替代；✅ 探针实测：声明开放权限仍 SIGTRAP）。原另两项（`READ_PASTEBOARD`、`READ_WRITE_DESKTOP_DIRECTORY`）已于 2026-10-19 **撤销申请**（`docs/001-能力复刻评估.md` REV-5）；此后新增 ACL 一律按本条的「申请 → 重新生成 Profile → 装机验证」流程走。
 
 依据：规划 §10；`docs/ACL配置.md` §1–§3；库规划 §D.8 轮次 ①/①′、§9.5。
 
