@@ -616,7 +616,8 @@ const PI_WEB_PATCH_MARKERS = [
   { rel: '.next/server/app/api/cwd/browse/route.js', marker: 'PI_HOS_ROOTS' },
   { rel: '.next/server/app/api/cwd/validate/route.js', marker: 'pi-hos-sandbox-alias' },
   { rel: '.next/server/app/api/sessions/[id]/export/route.js', marker: 'pi-hos-export-runtime-guard' },
-  { rel: '.next/server/app/api/cwd/browse/route.js', marker: 'pi-hos-picker-contract' }
+  { rel: '.next/server/app/api/cwd/browse/route.js', marker: 'pi-hos-picker-contract' },
+  { rel: '.next/server/app/api/host/perm/route.js', marker: 'perm.request' }
 ];
 
 /** 补丁阶段的失败（main 捕获后 exit 2：这是「输入不满足」，不是脚本 bug） */

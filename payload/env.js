@@ -137,11 +137,12 @@ function buildRoots(base, home, warn) {
       warn(`${KEYS.roots} 不是合法 JSON（${err && err.message}），改用沙箱兜底清单`);
     }
   }
-  // 兜底：**只有沙箱根**。桌面 / 文档 / 下载三个用户目录都要 OS 授权，本版已全部撤掉
-  // 那些声明（见 module.json5 头注释与 docs/ACL-无ACL评估.md）⇒ 兜底清单里再列它们，
-  // 只会给出永远 EACCES 的 Tab。
+  // 兜底：沙箱 + 文档 + 下载（**不含 desktop**：system_basic + ACL，本版不申请）。
+  // 两个用户目录是 user_grant，未授权时 browse 会回 403 + permission，前端据此弹授权窗。
   const fallbackRoots = [
-    { id: 'sandbox', label: '沙箱', path: joinPath(home, SANDBOX_DIRNAME), permType: null, fallback: true }
+    { id: 'sandbox', label: '沙箱', path: joinPath(home, SANDBOX_DIRNAME), permType: null, fallback: true },
+    { id: 'documents', label: '文档', path: `${USER_HOME}/Documents`, permType: 'directory_document', fallback: true },
+    { id: 'download', label: '下载', path: `${USER_HOME}/Download`, permType: 'directory_download', fallback: true }
   ];
   return { value: JSON.stringify(fallbackRoots), fallback: true };
 }

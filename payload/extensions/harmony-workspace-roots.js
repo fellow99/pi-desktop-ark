@@ -15,8 +15,8 @@
  * 它同时充当「PL1 插件机制是否生效」在**主目录解析**这一侧的探针（工程规划 §5.4）。
  *
  * 提供的能力：
- *   `/roots` 命令 —— 打印工作区主目录（本版只有「沙箱」）的解析结果：
- *     绝对路径、是否存在、是否可读。
+ *   `/roots` 命令 —— 打印三个工作区主目录（沙箱 / 文档 / 下载）的解析结果：
+ *     绝对路径、是否存在、是否可读；用户目录另附其 OS 级授权状态。
  *
  * 为什么需要它（specs/203-plugin-workspace-picker/ FR-203-019）：
  *   「选择工作区目录」对话框的主目录来自主进程写入的环境变量 `PI_HOS_ROOTS`
@@ -50,7 +50,7 @@ const PERMISSION_BRIDGE = "__PI_HOS_PERMISSION__";
 const ROOTS_ENV = "PI_HOS_ROOTS";
 
 /** 每个主目录的期望 id（顺序即对话框 Tab 顺序）。 */
-const EXPECTED_IDS = ["sandbox"];
+const EXPECTED_IDS = ["sandbox", "documents", "download"];
 
 function lines(...parts) {
   return parts.filter((p) => p !== undefined && p !== null).join("\n");
@@ -124,7 +124,7 @@ function buildReport() {
       heading,
       `  ⚠ ${error}`,
       "",
-      "  期望的主目录：沙箱（本版不声明任何用户目录根）。",
+      "  期望的三个主目录：沙箱 / 文档 / 下载。",
       "  对话框顶部缺失 Tab 时先查这里。",
     );
   }
@@ -151,9 +151,10 @@ function buildReport() {
     "",
     "  说明：",
     "    · 沙箱根 = <filesDir>/workspace（V2：目录从库持有的 filesDir 派生，不再有 userData）。",
-    "    · 本版**不声明任何用户目录根**：桌面（system_basic + ACL）/ 文档 / 下载 三项权限已全部撤销，",
-    "      所以选择器里只有「沙箱」一个 Tab。外部文件请用「附加文件 / 选择器」（fs.pickFolder，",
-    "      返回 URI、仅本会话有效——`FILE_ACCESS_PERSIST` 也已撤销，见 docs/ACL-无ACL评估.md）。",
+    "    · 沙箱根以外的两个用户目录（文档 / 下载）是 **normal 级 user_grant**：点 Tab 时",
+    "      前端回 403（带 permission）→ 经 /api/host/perm 触发一次系统授权窗 → 授予后自动重试列举。",
+    "    · 桌面目录**不声明**（system_basic + ACL，本版不申请）；`FILE_ACCESS_PERSIST` 亦未申请，",
+    "      选择器返回的 URI 只在本会话有效（见 docs/ACL-无ACL评估.md）。",
     "    · 对话框内的「主动弹出授权窗」尚未通过 PoC（FR-203-017）。",
     "    · checkPermission 有假阴性（授予后仍可能报 false）；请以「状态」行的真实读目录结果为准。",
   );
@@ -161,7 +162,7 @@ function buildReport() {
 
 export default function harmonyWorkspaceRoots(pi) {
   pi.registerCommand("roots", {
-    description: "显示工作区主目录（本版只有沙箱）的解析结果与可读性",
+    description: "显示三个工作区主目录（沙箱/文档/下载）的解析结果与可读性",
     handler: async (_args, ctx) => {
       const report = buildReport();
       // 命令结果的主要通道是 UI；没有 UI 的模式（json/print）下退化为控制台。

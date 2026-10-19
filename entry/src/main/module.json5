@@ -52,8 +52,10 @@
     // electron/src/main/module.json5 的 KEEP_BACKGROUND_RUNNING），此后按本版实测**收窄**：
     //   · 已撤 `READ_PASTEBOARD`：页面粘贴由 ArkWeb 自行读剪贴板，应用侧 0 处
     //     `@ohos.pasteboard` 调用（真机：该权限 `grantStatus=-1` 未授予时 Ctrl+V 仍可粘贴）。
-    //   · 已撤 `READ_WRITE_{DESKTOP,DOCUMENTS,DOWNLOAD}_DIRECTORY`：用户目录一律不再直访
-    //     ⇒ 工作区选择器只剩「沙箱」一个根（见 PiDesktopRuntime#declaredRoots）。
+    //   · 已撤 `READ_WRITE_DESKTOP_DIRECTORY`：system_basic + ACL，本版不申请
+    //     ⇒ 选择器不提供「桌面」根（见 PiDesktopRuntime#declaredRoots）。
+    //   · 保留 `READ_WRITE_{DOCUMENTS,DOWNLOAD}_DIRECTORY`（**normal 级、无 ACL**）：
+    //     点 Tab 时由 `perm.request` 弹一次授权窗，授予后才列举（补丁 0006）。
     //   · 已撤 `FILE_ACCESS_PERSIST`：随之不再调用 `fileShare.persistPermission`
     //     （`fs.pickFolder` 返回的 URI 只在本会话有效，见 HostCapabilities#pick）。
     // 判定依据见 pi-desktop-hos/docs/ACL申请清单.md：
@@ -114,6 +116,29 @@
       { "name": "ohos.permission.ACCELEROMETER" },
       { "name": "ohos.permission.GET_FILE_ICON" },
       { "name": "ohos.permission.LOCK_WINDOW_CURSOR" },
+      // 用户目录两根（**normal 级、不需要 ACL**）：点「文档 / 下载」Tab 时由
+      // perm.request 弹一次系统授权窗，授予后即可直接列举（见
+      // docs/ACL-无ACL评估.md 与 patches/v0.12.1/0006-directory-picker-permission-flow.patch）。
+      {
+        "name": "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",
+        "reason": "$string:documents_dir",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY",
+        "reason": "$string:download_dir",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
       {
         "name": "ohos.permission.CUSTOM_SCREEN_CAPTURE",
         "reason": "$string:screen_capture",
