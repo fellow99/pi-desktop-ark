@@ -1,5 +1,5 @@
 import { abilityAccessCtrl, bundleManager, common, Permissions, Want } from '@kit.AbilityKit';
-import { fileShare, picker } from '@kit.CoreFileKit';
+import { picker } from '@kit.CoreFileKit';
 import { notificationManager } from '@kit.NotificationKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { NodeLogEntry, NodeRuntime } from '@fellow99/node-bridge';
@@ -241,16 +241,19 @@ export class HostCapabilities {
    */
   private static attribution(permission: string): string {
     if (permission === 'ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY') {
-      return '「下载」目录读写：把工作区选到下载目录、或让 bash/文件工具读写那里时需要（user_grant，可在对话框内申请）';
+      return '「下载」目录读写：本版**已撤掉该声明**（user_grant，但撤销后即可零弹窗）'
+        + ' ⇒ 下载目录不再作为工作区根；外部文件请用 fs.pickFolder 选择器（URI、仅本会话）';
     }
     if (permission === 'ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY') {
-      return '「文档」目录读写：把工作区选到文档目录时需要（user_grant，可在对话框内申请）';
+      return '「文档」目录读写：本版**已撤掉该声明**（同上）⇒ 文档目录不再作为工作区根';
     }
     if (permission === 'ohos.permission.READ_WRITE_DESKTOP_DIRECTORY') {
-      return '「桌面」目录读写：system_basic 级，**普通应用的对话框申请不会生效**，只能在系统设置里授予（或由签名 profile 的 ACL 白名单给）';
+      return '「桌面」目录读写：本版**已撤掉该声明**（system_basic + 必须 ACL，普通应用弹窗无效）'
+        + ' ⇒ 桌面目录不再作为工作区根';
     }
     if (permission === 'ohos.permission.FILE_ACCESS_PERSIST') {
-      return '持久化选择器授权：让用户选过的目录在**重启后**仍然可读写（只申请一次不够，还要在启动时重新 activate）';
+      return '持久化选择器授权：本版**已撤掉该声明** ⇒ `fileShare.persistPermission` 不再调用，'
+        + '选择器返回的 URI 只在**本次会话**有效（重启后需重选）';
     }
     if (permission === 'ohos.permission.INTERNET') {
       return '访问网络：调模型 API 用；本工程的 Host 走 loopback，不授予不影响本机对话';
@@ -262,20 +265,21 @@ export class HostCapabilities {
    * 权限 → **下一步动作**（E19）。`granted` 时返回 `none`。
    *
    * 判定依据是「能不能靠用户点一下就解决」：
-   *   · user_grant（三目录之一 / 持久化授权）⇒ 先 `perm.request` 弹窗，被拒后 `perm.openAppInfo`；
-   *   · system_basic（如桌面目录）⇒ 弹窗无效，直接 `perm.openAppInfo`。
+   *   · user_grant（文档 / 下载 / 持久化授权）⇒ 先 `perm.request` 弹窗，被拒后 `perm.openAppInfo`；
+   *   · 已撤掉声明的权限（桌面 / 文档 / 下载 / 持久化 / 剪贴板）⇒ 没有下一步，如实回 `none`
+   *     （别把用户引到注定失败的弹窗上）。
    */
   private static nextStep(permission: string, granted: boolean): string {
     if (granted) {
       return 'none';
     }
-    if (permission === 'ohos.permission.READ_WRITE_DESKTOP_DIRECTORY') {
-      return 'perm.openAppInfo';
-    }
-    if (permission === 'ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY'
+    if (permission === 'ohos.permission.READ_WRITE_DESKTOP_DIRECTORY'
       || permission === 'ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY'
-      || permission === 'ohos.permission.FILE_ACCESS_PERSIST') {
-      return 'perm.request（对话框内申请）；若被拒再 perm.openAppInfo';
+      || permission === 'ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY'
+      || permission === 'ohos.permission.FILE_ACCESS_PERSIST'
+      || permission === 'ohos.permission.READ_PASTEBOARD') {
+      // 本版未声明这些权限（用户目录 / 持久化 / 剪贴板）：任何引导都不会生效。
+      return 'none';
     }
     return 'perm.request';
   }
@@ -401,8 +405,9 @@ export class HostCapabilities {
    *      否则调用方会拿 URI 当路径去 stat，然后得到"文件不存在"的假象。
    *   ② **用户取消不是错误，但必须显式区分**（`cancelled`）：返回空数组会让调用方以为
    *      "选到了空目录"，而真正的失败又被吞掉 —— 两者必须能分开。
-   *   ③ **尽力持久化授权**：`fileShare.persistPermission` 让重启后仍可访问；
-   *      失败不推翻成功（URI 在本次会话内可用），但如实回 `persisted:false` + 原因。
+   *   ③ **不做持久化**：本版不申请 `ohos.permission.FILE_ACCESS_PERSIST`（见
+   *      docs/ACL-无ACL评估.md）⇒ 不调用 `fileShare.persistPermission`，URI 授权只在
+   *      **本次会话**有效，重启后失效。返回 `persisted:false` + 原因，不假装持久化成功。
    */
   private static async pick(context: common.UIAbilityContext, argsJson: string, folder: boolean): Promise<string> {
     const capability: string = folder ? 'fs.pickFolder' : 'fs.pickFiles';
@@ -416,31 +421,15 @@ export class HostCapabilities {
         return '{"ok":false,"capability":"' + capability + '","error":"cancelled",'
           + '"detail":"用户取消或未选择任何项（不是失败，调用方不应重试）"}';
       }
-      let persisted: boolean = false;
-      let persistError: string = '';
-      try {
-        const policies: fileShare.PolicyInfo[] = [];
-        for (const u of uris) {
-          const policy: fileShare.PolicyInfo = {
-            uri: u,
-            operationMode: fileShare.OperationMode.READ_MODE | fileShare.OperationMode.WRITE_MODE
-          };
-          policies.push(policy);
-        }
-        await fileShare.persistPermission(policies);
-        persisted = true;
-      } catch (e) {
-        persistError = HostCapabilities.describe(e);
-        Log.warn('picker 持久化授权失败（URI 仍可用于本次会话）：' + persistError);
-      }
       const rows: string[] = [];
       for (const u of uris) {
         rows.push('"' + escapeJson(u) + '"');
       }
       return '{"ok":true,"capability":"' + capability + '","count":' + uris.length
         + ',"uris":[' + rows.join(',') + ']'
-        + ',"persisted":' + (persisted ? 'true' : 'false')
-        + (persistError.length > 0 ? ',"persistError":"' + escapeJson(persistError) + '"' : '')
+        + ',"persisted":false'
+        + ',"persistReason":"本版不申请 ohos.permission.FILE_ACCESS_PERSIST（见 docs/ACL-无ACL评估.md）'
+        + '⇒ 未调用 fileShare.persistPermission；URI 授权只在本次会话有效"'
         + ',"kind":"uri","hint":"返回的是 URI（file://…），不是文件系统路径：ArkTS 侧可直接 fileIo 打开；'
         + 'Node 侧 node:fs 不认 URI，需先转成路径"}';
     } catch (e) {

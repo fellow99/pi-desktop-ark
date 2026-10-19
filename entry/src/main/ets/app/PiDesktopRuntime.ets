@@ -35,7 +35,6 @@ import {
   HOST_MAILBOX_DIR_NAME,
   ENV_HOST_MAILBOX,
   SandboxRootCheck,
-  USER_HOME_DIR,
   WAIT_RUNNING_TIMEOUT_MS,
   appUrl,
   checkSandboxRoot,
@@ -600,9 +599,10 @@ export class PiDesktopRuntime {
   private declaredRoots(context: common.UIAbilityContext): DeclaredRoot[] {
     const roots: DeclaredRoot[] = [];
     roots.push(new DeclaredRoot('sandbox', '沙箱', sandboxRoot(context.filesDir), ''));
-    roots.push(new DeclaredRoot('desktop', '桌面', USER_HOME_DIR + '/Desktop', 'directory_desktop'));
-    roots.push(new DeclaredRoot('documents', '文档', USER_HOME_DIR + '/Documents', 'directory_document'));
-    roots.push(new DeclaredRoot('download', '下载', USER_HOME_DIR + '/Download', 'directory_download'));
+    // 刻意**只有一个根**：桌面/文档/下载三个用户目录都要 OS 授权（桌面还属 system_basic，
+    // 必须 ACL），本版已全部撤掉这些声明（见 module.json5 头注释与
+    // docs/ACL-无ACL评估.md）⇒ 与其在 UI 里留三个永远打不开的 Tab，不如不声明它们。
+    // 用户要处理外部文件，走「附加文件 / 选择器」（fs.pickFolder，URI 授权、仅本会话）。
     return roots;
   }
 

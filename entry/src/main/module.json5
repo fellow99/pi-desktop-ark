@@ -48,14 +48,20 @@
       }
     ],
     // ────────────────────────────────────────────────────────────────────────
-    // 权限声明面：与 pi-desktop-hos 逐项一致（来源：web_engine/src/main/module.json5
-    // 的 23 项 + electron/src/main/module.json5 的 KEEP_BACKGROUND_RUNNING）。
+    // 权限声明面：**基线**取自 pi-desktop-hos（web_engine/src/main/module.json5 的 23 项 +
+    // electron/src/main/module.json5 的 KEEP_BACKGROUND_RUNNING），此后按本版实测**收窄**：
+    //   · 已撤 `READ_PASTEBOARD`：页面粘贴由 ArkWeb 自行读剪贴板，应用侧 0 处
+    //     `@ohos.pasteboard` 调用（真机：该权限 `grantStatus=-1` 未授予时 Ctrl+V 仍可粘贴）。
+    //   · 已撤 `READ_WRITE_{DESKTOP,DOCUMENTS,DOWNLOAD}_DIRECTORY`：用户目录一律不再直访
+    //     ⇒ 工作区选择器只剩「沙箱」一个根（见 PiDesktopRuntime#declaredRoots）。
+    //   · 已撤 `FILE_ACCESS_PERSIST`：随之不再调用 `fileShare.persistPermission`
+    //     （`fs.pickFolder` 返回的 URI 只在本会话有效，见 HostCapabilities#pick）。
     // 判定依据见 pi-desktop-hos/docs/ACL申请清单.md：
-    //   · 【ACL】= 受限权限（provisionEnable=true 且 level ∈ {system_basic, system_core}），
-    //     必须按本包名向华为申请，且**获批后写进发布 Profile**（Profile 变了要重建）；
-    //   · 其余为**开放权限**（provisionEnable=false 或 level=normal），声明即生效
-    //     （user_grant 的项在运行期首次访问时弹窗）。
-    // 本包名 org.fellow99.pi.PiDesktopArk 已按同一清单提交 ACL 申请。
+    //   · 【ACL】= 受限权限（level ∈ {system_basic, system_core}），必须按本包名申请，
+    //     且**获批后写进发布 Profile**（Profile 变了要重建）；
+    //   · 其余为**开放权限**（level=normal），声明即生效（user_grant 的项运行期弹窗）。
+    // 现役 ACL 只剩 1 项：`kernel.ALLOW_WRITABLE_CODE_MEMORY`（JIT 关键路径）。
+    // 「零 ACL」的可行性与代价见 docs/ACL-无ACL评估.md。
     // ────────────────────────────────────────────────────────────────────────
     "requestPermissions": [
       { "name": "ohos.permission.INTERNET" },
@@ -65,10 +71,9 @@
       { "name": "ohos.permission.PRINT" },
       { "name": "ohos.permission.PREPARE_APP_TERMINATE" },
       { "name": "ohos.permission.ACCESS_BIOMETRIC" },
-      { "name": "ohos.permission.FILE_ACCESS_PERSIST" },
       { "name": "ohos.permission.PRIVACY_WINDOW" },
       { "name": "ohos.permission.WINDOW_TOPMOST" },
-      // 【ACL 1/3 · 关键路径】内置 Node/V8 的 JIT 必需；无它 V8 走 JIT 即 SIGTRAP
+      // 【ACL 1/1 · 关键路径】内置 Node/V8 的 JIT 必需；无它 V8 走 JIT 即 SIGTRAP
       //（探针实测：声明 EXEMPT_ANONYMOUS_EXECUTABLE_MEMORY 等开放权限**不能**替代）
       { "name": "ohos.permission.KEEP_BACKGROUND_RUNNING" },
       { "name": "ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY" },
@@ -109,48 +114,6 @@
       { "name": "ohos.permission.ACCELEROMETER" },
       { "name": "ohos.permission.GET_FILE_ICON" },
       { "name": "ohos.permission.LOCK_WINDOW_CURSOR" },
-      // 【ACL 2/3】剪贴板粘贴到对话输入框（user_grant，运行期弹窗）
-      {
-        "name": "ohos.permission.READ_PASTEBOARD",
-        "reason": "$string:access_pasteboard",
-        "usedScene": {
-          "abilities": [
-            "EntryAbility"
-          ],
-          "when": "inuse"
-        }
-      },
-      {
-        "name": "ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY",
-        "reason": "$string:download_dir",
-        "usedScene": {
-          "abilities": [
-            "EntryAbility"
-          ],
-          "when": "inuse"
-        }
-      },
-      {
-        "name": "ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY",
-        "reason": "$string:documents_dir",
-        "usedScene": {
-          "abilities": [
-            "EntryAbility"
-          ],
-          "when": "inuse"
-        }
-      },
-      // 【ACL 3/3】工作目录可能位于桌面目录时由 agent 文件工具直写（user_grant）
-      {
-        "name": "ohos.permission.READ_WRITE_DESKTOP_DIRECTORY",
-        "reason": "$string:desktop_dir",
-        "usedScene": {
-          "abilities": [
-            "EntryAbility"
-          ],
-          "when": "inuse"
-        }
-      },
       {
         "name": "ohos.permission.CUSTOM_SCREEN_CAPTURE",
         "reason": "$string:screen_capture",
