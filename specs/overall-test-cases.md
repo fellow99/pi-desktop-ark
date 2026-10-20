@@ -236,7 +236,7 @@ hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps piNodeM
 | B1 | Node | `v24.2.0` / `platform=openharmony` / `arch=arm64` / `modules=137` | `node.log` 的 `[bootstrap]` 行 |
 | B2 | **JIT/WASM（ACL 生效）** | jit 形态：`WebAssembly=object`、`兼容层 active=false` | `app.log` |
 | B3 | **compat 形态** | `--jitless`：`WebAssembly=undefined`、`兼容层 active=true`、惰性 getter 封印 5 项 | `app.log` |
-| B4 | 就绪耗时 | compat **885–934 ms**、jit **926 ms**（`elapsedMs`，载荷入口→就绪） | `app.log` 的 `PI_WEB_READY` |
+| B4 | 就绪耗时 | compat **885–934 ms**、jit **871–926 ms**（`elapsedMs`，载荷入口→就绪；修复轮复验 compat 911 ms / jit 871 ms） | `app.log` 的 `PI_WEB_READY` |
 | B5 | 崩溃 | `hilog` 中 `Cpp Crash` **0 命中** | `hilog` |
 | B6 | 沙箱路径 | `filesDir=/data/storage/el2/base/haps/entry/files`；载荷 `<filesDir>/payload/<sha12>/` | `app.log` |
 | B7 | 签名 HAP | **131,159,826 B**；`libs/arm64-v8a/` 4 个 `.so` 均 `compress_type=8` | `ls -l` + HAP 清单 |
@@ -283,3 +283,4 @@ hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps piNodeM
 | 2026-10-16 | 基线首轮（HAD-W24） | 建立 B1–B12 | `docs/000-工程规划.md` §10 附录 |
 | 2026-10-17 / 10-19 | 权限面收窄、压缩开关、零 ACL 评估 | 见 `docs/001-能力复刻评估.md` REV-5/6/7 + `docs/ACL-无ACL评估.md` | 同上 |
 | **2026-10-20** | **全模块一轮**：L0 门禁 + 108 PC 双形态单测（38×2）+ 204 单测（25）+ 204 远端双仓端到端 + 真实模型调用（compat）+ 真机 compat/jit 验收 | 见 [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) | `logs/20261020-1/` |
+| **2026-10-20（修复轮复验）** | 缺陷 D1–D3 修复后重装 `29ab4aca52e4` 载荷的 HAP：compat 就绪 **911 ms**、`/` `/api/web-auth` `/api/sessions` 均 **200**，设备侧扩展文件已含修复；jit 就绪 **871 ms**、`兼容层 active=false`、`WebAssembly=object` | [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) §康复验 | 同上 |
