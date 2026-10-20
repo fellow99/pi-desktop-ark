@@ -155,13 +155,15 @@ release 包启动：
 | TC-108-10…13 图片面（photon） | 真机 | ✅ **22 通过 / 0 失败 / 2 跳过**（31,221 ms） | ✅ **22 / 0 / 2**（2,100 ms） | compat 慢 ~15×＝`--jitless` 的代价，与 PC 侧同量级 |
 | TC-108-17/18 形态判定与就绪 | 真机 | ✅ 951 ms（产品包，无调试参数） | ✅ 871–926 ms | `pi-web.ready.json` 写出、`/` `/api/web-auth` `/api/sessions` 均 200 |
 | TC-108-19 真实对话（含 SSE 流式） | 真机 | ✅ 通过 | ✅ 通过 | compat：SSE `text/event-stream`，首事件 668 ms、18 个事件，模型文本 3,916 ms 到达，`stopReason=stop`、回复「真机通」；jit：17 个事件、回复「jit可用」、1,380 ms |
-| TC-108-20 图片附件 | 真机 | ⚠️ 部分通过 | ⚠️ 同 | 附件被接受并落会话（`imageBlocksInSession=1`，3.4 MB PNG / base64 ≈4.6 MB）；但 **DeepSeek 模型不支持图像输入**，如实回复「无法查看图片」——"模型可见图片"需视觉模型才能验 |
+| TC-108-20 图片附件 | 真机 | ✅ 通过（视觉模型） | ⬜ 未重跑 | 同一会话连发两张 `下载` 目录里的真实 PNG（3.4 MB / 4.3 MB，base64 4.6 MB / 5.8 MB）：第 1 张被描述为「混凝土预制构件 3D 渲染图，双矩形凹槽＋内埋金属吊装件，无文字，灰阶」；第 2 张被描述为「地铁站站厅层 3D 场景，约 6 台闸机、青绿立柱、橄榄绿导向带，可见文字『免费专用通道』/『Free / Unaccompanied Children Ticket Gate』/『← 出口 Exit』」，并明确回答「与上一张不是同一个物件」。两段描述互不相同且含**可核对的识读细节** ⇒ 图片确实进到了模型；`stopReason=stop`，流式 880 / 1,273 个 SSE 事件 |
 | TC-108-21 code-mode 降级 | 真机 | ✅ 通过（**如实降级**） | ✅ 通过（可用） | compat：`GET /api/mcp` 的 `codemode.sandbox = {state:"unavailable", error:"…Failed to load QuickJS: Cannot read properties of undefined (reading 'compile')"}`，工具不注册、进程不崩（pid 不变、`Cpp Crash` 0）；jit：`{state:"available"}` |
 | TC-108-22 jit 全链路 | 真机 | — | ✅ 零回归（14/14 + 22/22 + 真实模型调用 2/2） | 见右列形态对照 |
 | TC-108-23 release 合规 | 真机 | ⬜ 未执行（本轮为 debug 构建） | — | 调试参数在 `applicationInfo.debug=false` 时整条失效（代码路径 + 单测口径） |
 
 > 三条用例的驱动方式：与 UI 同一条链路（`POST /api/agent/new` → 订阅 `GET /api/agent/<id>/events` SSE → `POST /api/agent/<id>` 带 `images`），
-> 因此"流式是否真的逐块到达""附件是否真的进模型请求""code-mode 怎么降级"都是可证伪的设备事实。命令与原始输出见
+> 因此"流式是否真的逐块到达""附件是否真的进模型请求""code-mode 怎么降级"都是可证伪的设备事实。
+> 图片用例须选**视觉模型**：pi 的模型目录里 `deepseek-v4-pro` 是 `input:["text"]`（纯文本，用它会如实回"看不到图"），
+> `deepseek-flash` / `deepseek-v4-flash` 才是 `input:["text","image"]`。命令与原始输出见
 > [`../../logs/20261020-2/TEST_REPORT.md`](../../logs/20261020-2/TEST_REPORT.md) §7。
 
 **口径更正**：本轮不再以「PC 侧 `node --jitless` 全绿」作为 `AC-108` 的证据 —— 同一份断言改为在设备上跑，

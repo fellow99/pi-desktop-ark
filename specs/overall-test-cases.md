@@ -162,7 +162,7 @@
 |---|---|---|
 | [`108-jitless/test-cases.md`](108-jitless/test-cases.md) §四 TC-108-01…14 | **设备侧**双形态（fetch 14 例 + photon 24 例，各自启动应用） | ✅ fetch 14/14（compat 415 ms / jit 437 ms）；photon 22 过 + 2 跳过（compat 31.2 s / jit 2.1 s） |
 | 同 §二 TC-108-15/16 | 组装门禁（config 预编译 + 条件入口 + ESM 导出门禁） | ✅ 通过 |
-| 同 §四 TC-108-17…22 | 真机 compat / jit / auto | ✅ 通过（compat 就绪 871–969 ms；jit 零回归且真实模型调用 2/2）；TC-108-19 真实对话 + SSE ✅、TC-108-20 图片附件 ⚠️（模型不支持图像输入）、TC-108-21 code-mode ✅ 如实降级 |
+| 同 §四 TC-108-17…22 | 真机 compat / jit / auto | ✅ 通过（compat 就绪 871–969 ms；jit 零回归且真实模型调用 2/2）；TC-108-19 真实对话 + SSE ✅、TC-108-20 图片附件 ✅（视觉模型 deepseek-flash，两张真实 PNG 描述互异且含文字识读）、TC-108-21 code-mode ✅ 如实降级 |
 | [`108-jitless/spec.md`](108-jitless/spec.md) §8 K1 | compat 启动期一条无害 `unhandledRejection` | ⚠️ 已知问题（已定位根因，修法已试并回滚，留后续方案） |
 
 ### 2.10 `204` Git 插件（**索引，细节见模块文档**）
@@ -313,6 +313,6 @@ stream 从不发 `end`/`close` ⇒ 完成信号用 `beforeExit`、计数按事�
 | 2026-10-16 | 基线首轮（HAD-W24） | 建立 B1–B12 | `docs/000-工程规划.md` §10 附录 |
 | 2026-10-17 / 10-19 | 权限面收窄、压缩开关、零 ACL 评估 | 见 `docs/001-能力复刻评估.md` REV-5/6/7 + `docs/ACL-无ACL评估.md` | 同上 |
 | **2026-10-20** | **全模块一轮**：L0 门禁 + 108 PC 双形态单测（38×2）+ 204 单测（25）+ 204 远端双仓端到端 + 真实模型调用（compat）+ 真机 compat/jit 验收 | 见 [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) | `logs/20261020-1/` |
-| **2026-10-20 第 2 轮（续）** | 设备侧真实会话：配置 DeepSeek Key + 建工作区 + 对话（SSE 逐块，compat/jit 各一轮）+ 图片附件（3.4 MB PNG，附件入会话但模型不支持图像）+ code-mode 降级（compat `unavailable` 带结构化原因 / jit `available`） | 见 [`../logs/20261020-2/TEST_REPORT.md`](../logs/20261020-2/TEST_REPORT.md) §7 | `logs/20261020-2/` |
+| **2026-10-20 第 2 轮（续）** | 设备侧真实会话：配置 DeepSeek Key + 建工作区 + 对话（SSE 逐块，compat/jit 各一轮）+ 图片附件（视觉模型 `deepseek-flash`：两张真实 PNG 描述互异、含中英文识读）+ code-mode 降级（compat `unavailable` 带结构化原因 / jit `available`） | 见 [`../logs/20261020-2/TEST_REPORT.md`](../logs/20261020-2/TEST_REPORT.md) §7 | `logs/20261020-2/` |
 | **2026-10-20 第 2 轮** | **全部用例改在真机执行**：新增设备侧执行通道（`piTestScript`/`piTestSuite`/`piTestEnvFile` + `hdc rport`）；108 双形态 14/14×2、photon 22+2×2、204 单元 26/0×2、204 端到端 22/5（远端受设备网络限制）、真实模型调用 2/2×2 | 见 [`../logs/20261020-2/TEST_REPORT.md`](../logs/20261020-2/TEST_REPORT.md) | `logs/20261020-2/` |
 | **2026-10-20（修复轮复验）** | 缺陷 D1–D3 修复后重装 `29ab4aca52e4` 载荷的 HAP：compat 就绪 **911 ms**、`/` `/api/web-auth` `/api/sessions` 均 **200**，设备侧扩展文件已含修复；jit 就绪 **871 ms**、`兼容层 active=false`、`WebAssembly=object` | [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) §康复验 | 同上 |
