@@ -33,7 +33,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const JITLESS_DIR = path.resolve(HERE, '..');
 
 const { installIfNeeded } = require(path.join(JITLESS_DIR, 'index.js'));
-const { shimFetch, Request: ShimRequest, Response: ShimResponse } = require(path.join(JITLESS_DIR, 'fetch-shim.js'));
+const { shimFetch, installFetchShim, Request: ShimRequest, Response: ShimResponse } =
+  require(path.join(JITLESS_DIR, 'fetch-shim.js'));
 const { sealHttpLazyUndici } = require(path.join(JITLESS_DIR, 'http-lazy-undici.js'));
 const { createUndiciShim, UNAVAILABLE_MESSAGE } = require(path.join(JITLESS_DIR, 'undici-shim.js'));
 
@@ -305,6 +306,14 @@ await run('install-facts', async () => {
       const status = first.globals[name];
       assert(status === 'kept' || status === 'installed' || status === 'failed', `${name} 的三态取值非法：${status}`);
       assert(status !== 'failed', `${name} 不应是 failed（原生取不到、垫片也装不上）`);
+      /*
+       * 期望：**存在即 `kept`**（不粗暴覆盖）。
+       *
+       * 曾经在 compat 形态下改成"一律接管这六个全局"，想消掉真机那条
+       * `unhandledRejection: WebAssembly is not defined`——**失败并已回滚**：
+       * 接管后该报错依旧，但 Next 路由直接 500（`NextResponse` 继承 `globalThis.Response`，
+       * 最小垫片不满足其语义）。真机两轮对照记录在 `fetch-shim.js` 对应注释块里。
+       */
       if (before[name] === 'present') eq(status, 'kept', `Node 自带的 ${name} 应 kept（不粗暴覆盖）`);
     }
     assert(lines1.some((l) => l.includes('安装完成') && l.includes('httpLazy=installed')),
@@ -762,6 +771,41 @@ module.exports.FormData = out.FormData;
 });
 
 // ── 用例 11：静态护栏（硬约束扫描）────────────────────────────────────────
+/*
+ * 【真机回归】不得读取惰性全局。
+ *
+ * 2026-10-20 真机（HAD-W32 / Node v24.2.0）现场：安装兼容层后 app.log 里出现
+ *   `unhandledRejection: WebAssembly is not defined`
+ *   `at lazyllhttp (node:internal/deps/undici/undici:6340:9) … at lib/global.js`
+ * 根因是 Node 24 把 `Headers/Request/Response/FormData/Blob/File` 装成 **globalThis 上的
+ * 惰性 accessor**，而旧实现"逐个读值判存在"**一读就物化** ⇒ 拉起源码内的 undici。
+ * 现在改用 `Object.hasOwn`（不触发 getter）。这条用例就是钉死它：
+ * 把 `FormData` 换成会计数的 accessor，安装一次后计数必须仍为 0。
+ * 注意 PC 上这六个是普通数据属性，所以**这条用例在 PC 上很难自然复现**，只能靠模拟。
+ */
+await run('lazy-globals-untouched', async () => {
+  const desc = Object.getOwnPropertyDescriptor(globalThis, 'FormData');
+  let touched = 0;
+  Object.defineProperty(globalThis, 'FormData', {
+    configurable: true,
+    get() {
+      touched += 1;
+      return desc !== undefined && 'value' in desc ? desc.value : undefined;
+    }
+  });
+  try {
+    const result = installFetchShim();
+    eq(touched, 0,
+      '安装 fetch 垫片时不得读取惰性全局（读即物化 Node 内建 undici ⇒ lazyllhttp 抛 WASM 错）');
+    assert(['installed', 'kept'].includes(result.globals.FormData),
+      `FormData 三态应合法，实际 ${result.globals.FormData}`);
+    assert(globalThis.FormData !== undefined, '接管后 FormData 必须可取到值');
+  } finally {
+    if (desc === undefined) delete globalThis.FormData;
+    else Object.defineProperty(globalThis, 'FormData', desc);
+  }
+});
+
 await run('static-guard', async () => {
   /** 粗略去掉注释（保留换行），用来做"代码里不许出现"的扫描。 */
   function stripComments(source) {

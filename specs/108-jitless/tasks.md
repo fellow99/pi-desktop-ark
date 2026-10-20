@@ -38,9 +38,9 @@
 
 - [x] **T18** code review（requesting + receiving），修 Critical/Important
 - [x] **T19** 构建 HAP（`hvigorw assembleHap`），编译期零新增告警
-- [!] **T20** 真机部署 + AC-108-06…10（**阻塞**：hdc 无设备）
+- [x] **T20** 真机部署 + AC-108-06…10（compat 就绪 934 ms、路由/UI 均验、jit 零回归；K1 见 spec §8）
 - [x] **T21** git 提交（`git-commit` 规范前缀；不提交 `build-profile.json5` 的本地签名改动）
 
 ## 阻塞项记录
 
-- **B1（仍阻塞）**：hdc `list targets` 持续为空（多次 kill/start 无效）⇒ T20 未执行；PC 侧验证与构建不受影响，见 [`../../logs/20261019-1/TEST_REPORT.md`](../../logs/20261019-1/TEST_REPORT.md)。
+- **B1（已解除）**：设备已连接（HAD-W32 / 3QC0226526001227），T20 完成；遗留 K1（compat 启动期一条无害 rejection）与 TC-108-19…21（需模型凭据）见 spec §8。

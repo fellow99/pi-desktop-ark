@@ -987,18 +987,31 @@ function installFetchShim() {
     ['File', ShimFile],
   ]) {
     /*
-     * 【为什么逐个 try/catch 直接读，而不是先读属性描述符】这批名字是**惰性**属性，
-     * 而"读描述符"这一步本身就会物化它。物化失败时读取会**抛错**；若任其抛出，
-     * 外层的 try/catch 会把整段吞成一行"安装失败" ⇒ `globalThis.fetch` 完全不装
-     * ⇒ 宿主连模型都调不了。故读不到就当作"缺失"，补垫片。
+     * 【为什么不读值、也不读属性描述符 —— 真机实测（2026-10-20，HAD-W32 / Node v24.2.0）】
+     * Node 24 把这六个名字装成 **globalThis 上的惰性 accessor**，而**读值或读描述符都会
+     * 物化它** ⇒ 拉起源码里的内建 undici ⇒ `lazyllhttp` 立刻抛
+     * `ReferenceError: WebAssembly is not defined`（真机 app.log 里那条 unhandledRejection
+     * 的栈顶就是 `at lazyllhttp (node:internal/deps/undici/undici:6340:9)`）。
+     * 上一版正是"逐个 try/catch 直接读"，PC 上看不出来（PC 上这六个是普通数据属性），
+     * 一到真机就留下一条噪声 rejection。
+     *
+     * 现在改用 `Object.hasOwn`：它只查**属性是否存在**，**不触发 getter**。
+     * 存在即 `kept`（Node 原生提供，我们不碰）；真不存在才补垫片。
      */
-    let current;
-    try {
-      current = globalThis[name];
-    } catch {
-      current = undefined;
-    }
-    globals[name] = current === undefined ? defineGlobalShim(name, impl) : 'kept';
+    /*
+     * 【真机结论（2026-10-20，HAD-W32 / Node v24.2.0，两轮对照）】
+     *   · 只"不读"（本实现）⇒ compat 正常就绪，但 Next 启动链自己读这种惰性全局时，
+     *     Node 内建 undici 仍会被物化 ⇒ app.log 留一条
+     *     `unhandledRejection: WebAssembly is not defined`（栈顶 `lazyllhttp`）。功能不受影响。
+     *   · 试过"compat 下一律用垫片类接管这六个全局"（顶掉惰性 accessor）⇒ 报错依旧，
+     *     且 **Next 路由直接 500**（`/api/web-auth` 从 200 变 500）：`NextResponse` 继承
+     *     `globalThis.Response`，我们的最小垫片不满足其语义。**已回滚**。
+     * ⇒ 取舍：宁可留一条已记录、不影响功能的 rejection，也**不接管全局类**。
+     *     彻底消掉它需预载 `internal/deps/undici/undici`（要 `--expose-internals`，
+     *     参见同源工程 dshm 的 `installInternalUndiciShim`），列为后续项。
+     */
+    const present = Object.hasOwn(globalThis, name);
+    globals[name] = present ? 'kept' : defineGlobalShim(name, impl);
   }
 
   /*
@@ -1019,6 +1032,29 @@ function installFetchShim() {
 
   const status = fetchStatus === 'failed' ? 'failed' : fetchStatus;
   return { status, installed: status === 'installed', fetch: shimFetch, globals };
+}
+
+/*
+ * 给每个垫片类挂 `Symbol.toStringTag`。
+ *
+ * 为什么需要：`Object.prototype.toString.call(x)` 与部分库的跨来源判据会读它；
+ * 没有它时垫片对象打印成 `[object Object]`，与原生 `[object Response]` 不一致
+ * （真机上排查"这个 Response 是谁造的"时非常误导）。`instanceof` 仍然**不能**跨实现用，
+ * 判据一律走能力（见文件头）。
+ */
+for (const [tag, impl] of [
+  ['Headers', ShimHeaders],
+  ['Request', ShimRequest],
+  ['Response', ShimResponse],
+  ['FormData', ShimFormData],
+  ['Blob', ShimBlob],
+  ['File', ShimFile],
+]) {
+  try {
+    Object.defineProperty(impl.prototype, Symbol.toStringTag, { value: tag, configurable: true });
+  } catch {
+    /* 极少数运行时不支持改原型：不影响功能，静默跳过（下面仍以能力判据工作） */
+  }
 }
 
 module.exports = {

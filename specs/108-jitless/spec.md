@@ -155,3 +155,20 @@
 | 4 | 设置项**写侧**未实现 | 偏好 `pi-settings.nodeMode` 只**读**；应用内暂无写入入口。手动切换目前靠 debug 的 `piNodeMode` want 参数；release 下由 ACL 探测（`auto`）决定 |
 | 5 | 自检脚本不进发布归档 | `payload/jitless/selftest/` 在组装期被排除（属开发期工具），源码仍在库内供 TC-108-xx 复跑 |
 | 6 | 真机未验证（阻塞） | 本轮 `hdc list targets` 为空（设备未识别），AC-108-06…10 未取证；AC-108-01…05 已在 PC 侧完成 |
+
+---
+
+## 8. 真机验收结果（2026-10-20，HAD-W32 / Node v24.2.0 / 设备 `3QC0226526001227`）
+
+| 用例 | 结果 | 读数 |
+|---|---|---|
+| TC-108-17 模式判定（compat） | ✅ | `piNodeMode compat` ⇒ 载荷日志 `jitless 兼容层：active=true（WebAssembly=undefined）`；惰性 getter 封印 5 项；`fetch=installed`；六个全局 `kept` |
+| TC-108-18 启动到就绪 | ✅ | 新载荷 `59877c2987b3` 解包 → `PI_WEB_READY {"port":36885,…,"elapsedMs":934}`；**解释器模式冷启动 ≈0.93 s**（PC 上 44 s 是首次 require 大树的差异，设备 `.next` 读取快） |
+| 路由可用性 | ✅ | `GET /` = 200（`<title>Pi Desktop</title>`）；`/api/web-auth` = 200；`/api/sessions` = 200 且返回 JSON（**该路由会 import `@earendil-works/pi-coding-agent` ⇒ 其 `import * as undici` 走的就是条件入口**，未触发 npm undici 的 WASM 错） |
+| UI 渲染 | ✅ | `uitest dumpLayout` 文本含 pi-web 真实界面：「新建 / 搜索对话 / 会话 / 文件 / 文件操作 / 打开其他项目…」⇒ ArkWeb 正常加载 compat 形态服务 |
+| TC-108-22 jit 回归 | ✅ | `piNodeMode auto`（该机 ACL 已授予）⇒ `active=false（WebAssembly=object）`、无报错、`elapsedMs=926` |
+| 已知问题 K1 | ⚠️ | compat 形态每次冷启会在 app.log 留一条 `unhandledRejection: WebAssembly is not defined`（栈顶 `lazyllhttp` ← `node:internal/deps/undici`，由 **Next 启动链读取惰性全局**触发）。**不影响功能**（随后 `GET /api/web-auth` 200、就绪正常）。jit 形态无此条（对照实验已做） |
+| K1 的失败修法（已回滚） | ❌ | 试过"compat 下用垫片类接管 `Headers/Request/Response/FormData/Blob/File`"⇒ 该报错**依旧**，且 **Next 路由全部 500**（`NextResponse` 继承 `globalThis.Response`，最小垫片不满足其语义）。已回滚，代码里留了完整注释与后续方向（预载 `internal/deps/undici/undici`，需 `--expose-internals`，参见 dshm 的 `installInternalUndiciShim`） |
+| TC-108-19…21 | ⬜ | 真实对话需模型凭据（设备未配置）；图片与 code-mode 未在真机逐项触发。已在 PC 侧以真实上游代码路径覆盖 |
+
+**结论**：compat 形态在真机**可用**（就绪 + 路由 + UI），jit 形态**零回归**；唯一遗留是一条不影响功能的启动期 rejection（K1，已定位根因并给出后续方案）。
