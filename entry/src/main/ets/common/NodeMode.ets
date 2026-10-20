@@ -157,8 +157,17 @@ export function resolve(context: common.UIAbilityContext,
   }
 
   const probe: AclProbe = probeJitAcl();
-  if (probe.granted) {
-    return new NodeModeDecision(NODE_MODE_JIT, 'ACL 探测：' + probe.detail);
-  }
-  return new NodeModeDecision(NODE_MODE_COMPAT, 'ACL 探测（auto 兜底）：' + probe.detail);
+  /*
+   * 2026-10-20 手机真机（`JUY-AL80` / API 26）实测：**权限位授予 ≠ 内核真允许 JIT** ——
+   * 该机 `ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY` 查询为已授予，但按 jit 启动后
+   * 进程在 `libnode_bridge` 里 **SIGTRAP(TRAP_BRKPT)** 秒崩（同一 HAP 改 compat 则可正常就绪 1.6 s）。
+   * 也就是说这个权限位**不能**作为 JIT 可用性的预检；而一次误判的代价是整机不可用（终态 failed，
+   * 库契约 §2.6：进程内 Node 无法自动重启），远重于 compat 的性能损失（7–10×，但功能完整）。
+   * ⇒ `auto` 一律取 compat（宁慢不崩）；要 jit 必须**显式**选择：调试参数 `piNodeMode jit`
+   * 或偏好设置 `pi-settings.nodeMode=jit`（在已证实可用的设备上）。依据串里保留权限读数，便于归因。
+   */
+  const detail: string = probe.granted
+    ? 'ACL 探测：' + probe.detail + '；但权限位不能证明内核允许 JIT（手机实测仍 SIGTRAP），auto 保守取 compat'
+    : 'ACL 探测（auto 兜底）：' + probe.detail;
+  return new NodeModeDecision(NODE_MODE_COMPAT, detail);
 }

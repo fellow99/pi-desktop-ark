@@ -1,5 +1,7 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
+import { deviceInfo } from '@kit.BasicServicesKit';
+import { fileIo as fs } from '@kit.CoreFileKit';
 import { Log } from '../common/Constants';
 import * as NodeMode from '../common/NodeMode';
 import * as DeviceTest from '../common/DeviceTest';
@@ -80,6 +82,48 @@ export default class EntryAbility extends UIAbility {
     DeviceTest.DeviceTest.set(testReq.script, testReq.envFile, testReq.suite);
     if (testReq.script.length > 0) {
       Log.info('onCreate 设备用例通道：entry 将被覆盖为 ' + testReq.script);
+    }
+
+    // 形态判定的**持久证据**：手机侧 hilog 对三方应用被过滤（实测 0 行），只看得到载荷日志，
+    // 所以把「选了什么形态、依据是什么、设备是什么形态」落成一个小文件，供真机归因。
+    this.writeNodeModeReport(modeForUi, reasonForUi, flags, debugBuild);
+  }
+
+  /**
+   * 写 `<filesDir>/payload/node-mode.json`：形态 / 依据 / flags / 设备形态。
+   *
+   * 为什么不用 hilog 就够：不同机型对三方应用的 hilog 可见性策略不一致（手机 JUY-AL80 上实测 0 行），
+   * 而「compat 还是 jit」「依据是哪条」恰恰是排障第一现场，必须有一个稳定读得到的通道。
+   * 写失败不影响启动（只记 warn）。
+   */
+  private writeNodeModeReport(mode: string, reason: string, flags: string, debugBuild: boolean): void {
+    try {
+      const dir: string = this.context.filesDir + '/payload';
+      if (!fs.accessSync(dir)) {
+        fs.mkdirSync(dir, true);
+      }
+      let deviceType: string = '';
+      try {
+        deviceType = deviceInfo.deviceType; // phone / tablet / 2in1 / tv …
+      } catch (e) {
+        deviceType = '(读取失败)';
+      }
+      const json: string = '{\n'
+        + '  "at": "' + new Date().toISOString() + '",\n'
+        + '  "mode": "' + mode + '",\n'
+        + '  "reason": "' + reason.replace(/"/g, '\'').replace(/\n/g, ' ') + '",\n'
+        + '  "flags": "' + flags + '",\n'
+        + '  "debugBuild": ' + (debugBuild ? 'true' : 'false') + ',\n'
+        + '  "deviceType": "' + deviceType + '",\n'
+        + '  "deviceModel": "' + deviceInfo.productModel + '",\n'
+        + '  "osFullName": "' + deviceInfo.osFullName + '"\n'
+        + '}\n';
+      const path: string = dir + '/node-mode.json';
+      const file = fs.openSync(path, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+      fs.writeSync(file.fd, json);
+      fs.closeSync(file);
+    } catch (e) {
+      Log.warn('形态报告写入失败（不影响启动）：' + JSON.stringify(e));
     }
   }
 
