@@ -15,10 +15,12 @@ export default {
   },
   executionMode: 'sequential',
   async execute(_id, params, _signal, _onUpdate, ctx) {
+    // hintSuffix 原在 try 内声明、却在 catch 里使用 ⇒ 失败路径退化成 ReferenceError（2026-10-20 单测抓到）
+    let hintSuffix = '';
     try {
       const { root, outsideRoot, hint } = repoRoot(params, ctx);
       // FR-204-012：越出工作区根只提示不阻断（pi 信任模型无逐写审批）；hint 追加到成功输出
-      const hintSuffix = hint ? '\n' + hint : '';
+      hintSuffix = hint ? '\n' + hint : '';
       const { git } = gitRuntime();
       const fs = fsFor(root);
       await assertIsRepo(root);
@@ -50,7 +52,7 @@ export default {
       }
       return { content: [{ type: 'text', text: `未知 op：${op}` }], isError: true };
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       let msg = e.message;
       if (/nothing to stash/i.test(msg)) msg = '没有可储藏的修改（工作区干净）。';
       if (/MissingNameError|No name was provided/i.test(e.code || msg)) msg = 'stash 需要提交作者信息：请先 git_config set user.name / user.email。';

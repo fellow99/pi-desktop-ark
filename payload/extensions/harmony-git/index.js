@@ -1,4 +1,4 @@
-// synced-from: pi-desktop-hos@760c12d（单源：pi-desktop-hos/extensions/harmony-git；请勿在 ark 侧直接修改）
+// synced-from: pi-desktop-hos@d9511ae（单源：pi-desktop-hos/extensions/harmony-git；请勿在 ark 侧直接修改）
 // harmony-git — pi-agent 扩展工厂
 // 由 $PI_CODING_AGENT_DIR/extensions/ 加载；导出 default function (pi) => void
 import init from './lib/tools/init.js';

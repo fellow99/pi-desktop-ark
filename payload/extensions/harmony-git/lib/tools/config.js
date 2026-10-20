@@ -46,7 +46,7 @@ export default {
       await git.setConfig({ fs, dir: root, path: params.key, value: params.value });
       return { content: [{ type: 'text', text: `已设置 ${params.key} = ${params.value}` }], details: { ok: true, key: params.key, value: params.value } };
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       return { content: [{ type: 'text', text: `git_config 失败：${e.message}${hintSuffix}` }], details: { ok: false, message: e.message }, isError: true };
     }
   },

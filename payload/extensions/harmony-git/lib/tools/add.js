@@ -45,7 +45,7 @@ export default {
       await git.add({ fs, dir: root, filepath: params.filepath });
       return { content: [{ type: 'text', text: `Staged for commit: A ${params.filepath}` }], details: {} };
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       return { content: [{ type: 'text', text: `git_add 失败：${e.message}` }], details: {}, isError: true };
     }
   },

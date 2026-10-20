@@ -29,7 +29,7 @@ export default {
       const text = renderStatus(matrix, branchLine) + (hint ? '\n' + hint : '');
       return { content: [{ type: 'text', text }], details: { branchLine, ...{} } };
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       return { content: [{ type: 'text', text: `git_status 失败：${e.message}` }], details: {}, isError: true };
     }
   },

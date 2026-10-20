@@ -23,7 +23,7 @@ export default {
       const text = `Initialized empty git repository in ${root} (default branch "${defaultBranch}")${hint ? '\n' + hint : ''}`;
       return { content: [{ type: 'text', text }], details: { dir: root, defaultBranch } };
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       return { content: [{ type: 'text', text: `git_init 失败：${e.message}` }], details: {}, isError: true };
     }
   },

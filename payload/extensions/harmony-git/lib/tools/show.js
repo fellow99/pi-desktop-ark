@@ -35,7 +35,7 @@ export default {
       if (msg) lines.push('message:\n' + msg);
       return { content: [{ type: 'text', text: lines.join('\n') }], details: { oid, parents } };
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       return { content: [{ type: 'text', text: `git_show 失败：${e.message}` }], details: {}, isError: true };
     }
   },

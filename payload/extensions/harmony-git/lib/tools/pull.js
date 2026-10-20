@@ -63,7 +63,7 @@ export default {
         rethrowNet(e, url);
       }
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       return { content: [{ type: 'text', text: `git_pull 失败：${e.message}${hintSuffix}` }], details: { ok: false, message: e.message }, isError: true };
     }
   },

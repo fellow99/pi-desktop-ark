@@ -37,7 +37,7 @@ export default {
       const text = commits.map(renderCommit).join('\n');
       return { content: [{ type: 'text', text }], details: { count: commits.length, commits: commits.map((c) => ({ oid: c.oid, message: (c.commit.message || '').trim().split('\n')[0] })) } };
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       return { content: [{ type: 'text', text: `git_log 失败：${e.message}` }], details: {}, isError: true };
     }
   },

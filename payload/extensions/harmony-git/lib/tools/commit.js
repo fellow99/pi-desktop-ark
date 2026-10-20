@@ -42,7 +42,7 @@ export default {
       const text = `Created commit ${oid.slice(0, 12)} by ${author.name} <${author.email}>`;
       return { content: [{ type: 'text', text }], details: { oid, author } };
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       return { content: [{ type: 'text', text: `git_commit 失败：${e.message}` }], details: {}, isError: true };
     }
   },

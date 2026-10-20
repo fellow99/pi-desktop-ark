@@ -28,7 +28,7 @@ export default {
         : `Checked out ${params.ref}`;
       return { content: [{ type: 'text', text }], details: { ref: params.ref } };
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       return { content: [{ type: 'text', text: `git_checkout 失败：${e.message}` }], details: {}, isError: true };
     }
   },

@@ -46,7 +46,7 @@ export default {
       }
       throw new Error(`unknown action ${action}`);
     } catch (e) {
-      mapOsError(e, root);
+      mapOsError(e, typeof root === 'undefined' ? undefined : root);
       return { content: [{ type: 'text', text: `git_branch 失败：${e.message}` }], details: {}, isError: true };
     }
   },

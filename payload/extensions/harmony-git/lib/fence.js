@@ -60,17 +60,33 @@ export function resolveWithin(root, rel) {
  * 软链防护：realpath 后仍在 root 内才放行；root 本身不存在时跳过（新建场景）。
  * 返回 realpath 后的绝对路径。
  */
+/**
+ * 软链防护：realpath 后仍在 root 内才放行；目标不存在时按原路径返回（新建场景）。
+ *
+ * 【为什么 root 也必须 realpath（2026-10-20 单测 TC-H04 抓到的真实缺陷）】
+ * 只对目标做 realpath、却拿原始 root 字符串比较，任何让两者形态不同的因素都会被误判成
+ * "软链逃逸"：Windows 8.3 短名/大小写、macOS 的 /private/var、以及 root 自身是软链/junction。
+ * 现场：普通文件被拒（软链指向仓库根之外：sub/f.txt → …Tempchroot-xxxxsub.txt）。
+ */
 export async function resolveWithinReal(root, rel) {
   const abs = resolveWithin(root, rel);
   try {
     const real = await fsp.realpath(abs);
-    if (!isWithin(root, real)) {
+    if (!isWithin(await canonicalRoot(root), real)) {
       throw new FenceError(`软链指向仓库根之外：${rel} → ${real}`, 'GIT_FENCE_SYMLINK');
     }
     return real;
   } catch (err) {
     if (err && err.code === 'ENOENT') return abs; // 目标尚不存在（写入新文件）
     throw err;
+  }
+}
+/** root 的 canonical 形态（realpath 失败时退回原值，绝不改变放行/拒绝语义）。 */
+async function canonicalRoot(root) {
+  try {
+    return await fsp.realpath(root);
+  } catch {
+    return root;
   }
 }
 
