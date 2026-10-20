@@ -4,9 +4,13 @@
     "type": "entry",
     "description": "$string:module_desc",
     "mainElement": "EntryAbility",
+    // 支持的设备形态：2in1 / 平板（既有）+ 手机 / 电视（2026-10-20 追加，手机真机已部署验证）。
+    // 形态差异只影响窗口尺寸与「终端/PTY、外链」等宿主能力的事实呈现，不影响载荷与运行形态判定。
     "deviceTypes": [
       "2in1",
-      "tablet"
+      "tablet",
+      "phone",
+      "tv"
     ],
     "deliveryWithInstall": true,
     "installationFree": false,
