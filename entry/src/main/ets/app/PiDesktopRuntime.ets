@@ -44,6 +44,7 @@ import {
   sandboxRoot
 } from '../common/Constants';
 import { HttpProbeResult, PortResolution, Ports } from '../common/Ports';
+import { DeviceTest } from '../common/DeviceTest';
 import { HostCapabilities } from '../host/HostCapabilities';
 
 /** 界面上看到的状态机（与库的运行时状态区分：这里是「整机可用性」） */
@@ -264,6 +265,17 @@ export class PiDesktopRuntime {
     // ① 载荷装配
     this.setStage('装配载荷（路线判定）');
     const plan: PayloadPlan = this.buildPlan(context);
+    /*
+     * 设备侧用例通道（debug 专用，见 `common/DeviceTest.ets`）：把入口换成 resfile 下的语例脚本。
+     * 位置在 `buildPlan()` 之后、投递之前 —— 路线判定（归档 / 只读）仍照常做，只是「跑哪个入口」由它决定；
+     * 载荷照旧物化，因为语例要在真实的载荷 / agent 目录上跑。断言不在这里，本类只负责让位。
+     */
+    const testScript: string = DeviceTest.scriptPath();
+    if (testScript.length > 0) {
+      plan.entry = testScript;
+      plan.decision = plan.decision + '；调试用例通道覆盖 entry=' + testScript;
+      Log.info('设备用例通道生效：entry=' + testScript + '（本轮不启动 pi-web，由语例自行输出结果）');
+    }
     this.route = plan.route;
     this.routeDecision = plan.decision;
     this.bootstrapPlan = plan.bootstrap.length > 0 ? plan.bootstrap : '(未使用：自检路线)';
@@ -591,6 +603,19 @@ export class PiDesktopRuntime {
     // （`payload/env.js` 的 KEYS 只管 pi 自己消费的变量）——它是**库的传输通道**，
     // 值只由应用侧给出（库不解释沙箱路径，C1）；Node 侧 `host.js` 与 ArkTS 侧泵读同一个串。
     env[ENV_HOST_MAILBOX] = context.filesDir + '/' + HOST_MAILBOX_DIR_NAME;
+    /*
+     * 设备用例通道（debug 专用）：**只转发环境文件的路径**，内容由语例自己读。
+     * 测试态的仓库地址 / 账号 / 密钥因此不进入 Node 的环境变量、也不进任何日志（敏感信息零落盘）。
+     */
+    const testEnvFile: string = DeviceTest.envFilePath();
+    if (testEnvFile.length > 0) {
+      env['PI_DEVICE_TEST_ENV'] = testEnvFile;
+    }
+    // 跑哪一支语例：单独给（108 的语例要自己安装兼容层，执行器不能先装一遍）
+    const testSuite: string = DeviceTest.suite();
+    if (testSuite.length > 0) {
+      env['PI_DEVICE_TEST_SUITE'] = testSuite;
+    }
     return env;
   }
 

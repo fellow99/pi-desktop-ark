@@ -36,6 +36,11 @@ libs/**/*.har
 #    路线 ② 永远不命中、应用静默退回自检载荷）。
 entry/src/main/resources/resfile/pi-web/
 
+# ── 设备侧用例脚本（**派生**，不入库）──
+# 由 `node scripts/stage-devtests.mjs` 从 `payload/devtest/` + `payload/jitless/` 投放；
+# 只给 debug 构建的调试通道（`piTestScript`）用，发布前必须 `--clean`（合规 G9：发布包无调试入口）。
+entry/src/main/resources/resfile/devtest/
+
 # 本地签名材料目录（.p12/.cer/.p7b/.csr + material 解密密钥链，绝不入库）
 /.ohos/
 

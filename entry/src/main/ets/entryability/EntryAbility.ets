@@ -2,6 +2,7 @@ import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.Ab
 import { window } from '@kit.ArkUI';
 import { Log } from '../common/Constants';
 import * as NodeMode from '../common/NodeMode';
+import * as DeviceTest from '../common/DeviceTest';
 import { WindowState } from '../common/WindowState';
 import { PiDesktopRuntime } from '../app/PiDesktopRuntime';
 
@@ -69,6 +70,17 @@ export default class EntryAbility extends UIAbility {
     AppStorage.setOrCreate<string>('nodeModeReason', reasonForUi);
     Log.info('onCreate flags=' + flags + ' mode=' + modeForUi + '（依据：' + reasonForUi + '）'
       + ' debug=' + debugBuild + ' filesDir=' + this.context.filesDir);
+
+    /*
+     * 设备侧用例通道（`specs/overall-test-cases.md` §3）：把 Node 入口换成语例脚本，
+     * 让「108 兼容层 / 204 工具链 / 真实模型调用」在**设备上的 Node**里跑（PC 侧跑不算证据）。
+     * release 构建里 `resolve()` 直接返回空请求（合规 G9：发布包没有调试入口）。
+     */
+    const testReq: DeviceTest.DeviceTestRequest = DeviceTest.resolve(this.context.resourceDir, debugBuild, params);
+    DeviceTest.DeviceTest.set(testReq.script, testReq.envFile, testReq.suite);
+    if (testReq.script.length > 0) {
+      Log.info('onCreate 设备用例通道：entry 将被覆盖为 ' + testReq.script);
+    }
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
