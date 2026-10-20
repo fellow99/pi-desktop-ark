@@ -166,5 +166,14 @@ release 包启动：
 > `deepseek-flash` / `deepseek-v4-flash` 才是 `input:["text","image"]`。命令与原始输出见
 > [`../../logs/20261020-2/TEST_REPORT.md`](../../logs/20261020-2/TEST_REPORT.md) §7。
 
+### 五、手机真机（2026-10-20，`JUY-AL80` / 华为畅享 90 / API 26）
+
+| 用例 | 结果 | 事实 |
+|---|---|---|
+| TC-108-17 形态判定（compat） | ✅ | `auto`（不带任何调试参数）⇒ `node-mode.json` 记录 `mode=compat`，依据串如实写「权限已授予但不足以证明 JIT 可用」 |
+| TC-108-18 启动到就绪 | ✅ | `PI_WEB_READY elapsedMs=1616`；`/` 与 `/api/web-auth` 均 200；ArkWeb 渲染进程在跑，`/proc/net/tcp` 有与载荷端口的 ESTABLISHED 连接 |
+| TC-108-22 jit 形态 | ❌ 该机不可用 | 该机权限位已授予但 jit 启动必 `SIGTRAP` 崩（本轮据此把 `auto` 收紧为 compat；要 jit 只能显式选择，且需在已证实设备上用） |
+| 形态判定的持久证据 | ✅ 新增通道 | `<filesDir>/payload/node-mode.json`（mode/reason/flags/deviceType/deviceModel/osFullName）——本机 hilog 对三方应用不可见，只能靠它归因 |
+
 **口径更正**：本轮不再以「PC 侧 `node --jitless` 全绿」作为 `AC-108` 的证据 —— 同一份断言改为在设备上跑，
 两种形态各自启动应用各跑一遍（`--jitless` 与 jit 是**进程级**形态）。

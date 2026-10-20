@@ -42,7 +42,15 @@
 1. **`probeFlags`（仅 debug 构建）** —— 直接给出 Node 参数串，**绕过**模式判定（既有诊断通道，行为不变）；
 2. **want 参数 `piNodeMode`**（`jit` / `compat` / `auto`，仅 debug 构建生效）；
 3. **持久设置** `preferences('pi-settings')` 的 `nodeMode` 键（默认 `auto`）；
-4. **`auto`** ⇒ `abilityAccessCtrl.checkAccessTokenSync(tokenId, 'ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY')`：`PERMISSION_GRANTED` ⇒ jit；否则 ⇒ compat。
+4. **`auto`** ⇒ `abilityAccessCtrl.checkAccessTokenSync(tokenId, 'ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY')` **只用于出依据串**；无论授予与否**一律取 compat**。
+
+> **2026-10-20 修订（手机真机实测推翻旧口径）**：旧版本按「`PERMISSION_GRANTED` ⇒ jit」实现，结果在
+> `JUY-AL80`（`deviceType=phone`，API 26）上该权限查询**确为已授予（`→ 0`）**，但按 jit 启动后进程在
+> `libnode_bridge` 内 **SIGTRAP(TRAP_BRKPT)** 秒崩（同一 HAP 以 compat 启动则可 1.6 s 就绪）。
+> ⇒ **权限位不是 JIT 可用性的预检**；一次误判的代价是整机不可用（`failed` 为终态，库契约 §2.6 不支持进程内重启），
+> 远重于 compat 的 7–10× 性能损失（功能完整）。
+> 因此：`auto` = 安全优先（compat）；**要 jit 必须显式选择** —— 调试参数 `piNodeMode jit`，或已证实可用设备上把
+> 设置项 `pi-settings.nodeMode` 设为 `jit`。
 
 约束：
 - 判定结果必须写进日志（`onCreate` 一行 + hilog），且必须说明**依据**（哪个来源、ACL 探测返回什么）。
@@ -155,6 +163,20 @@
 | 4 | 设置项**写侧**未实现 | 偏好 `pi-settings.nodeMode` 只**读**；应用内暂无写入入口。手动切换目前靠 debug 的 `piNodeMode` want 参数；release 下由 ACL 探测（`auto`）决定 |
 | 5 | 自检脚本不进发布归档 | `payload/jitless/selftest/` 在组装期被排除（属开发期工具），源码仍在库内供 TC-108-xx 复跑 |
 | 6 | 真机未验证（阻塞） | 本轮 `hdc list targets` 为空（设备未识别），AC-108-06…10 未取证；AC-108-01…05 已在 PC 侧完成 |
+
+---
+
+## 8.1 手机真机结果（2026-10-20 追加，`JUY-AL80` / 华为畅享 90 / API 26 / `deviceType=phone`）
+
+| 项 | 结果 |
+|---|---|
+| 装机 | `install bundle successfully.`（HAP 含 `deviceTypes: 2in1/tablet/phone/tv`） |
+| 旧逻辑（`auto`⇒权限授予⇒jit） | ❌ **必崩**：`SIGTRAP(TRAP_BRKPT)`，栈在 `libnode_bridge.so`，进程秒退、无任何载荷日志 |
+| 新逻辑（`auto`⇒compat） | ✅ 就绪 **1,616 ms**、`WebAssembly=undefined`、`兼容层 active=true`、`/` 与 `/api/web-auth` 均 200 |
+| ArkWeb | ✅ 渲染进程 `…:render` 在跑；`/proc/net/tcp` 可见 `127.0.0.1:42777` LISTEN + 与渲染侧 **ESTABLISHED** 连接 ⇒ 页面确实连上了载荷服务 |
+| 形态证据 | `<filesDir>/payload/node-mode.json`：`mode=compat`、`reason` 含 `ALLOW_WRITABLE_CODE_MEMORY → 0（PERMISSION_GRANTED）；但权限位不能证明内核允许 JIT…`、`deviceType=phone`、`deviceModel=JUY-AL80` |
+| `hilog` | ⚠️ 该机对三方应用的 hilog **完全不可见**（`hilog -x` 中本应用 0 行）⇒ 排障改走 `node-mode.json` + `payload/app.log` |
+| `hdc fport` | ⚠️ 该机 `fport` 规则登记成功但**立即失效**（`fport ls` 为空），host→device HTTP 取证不可用；仅短窗口内偶发可用 |
 
 ---
 

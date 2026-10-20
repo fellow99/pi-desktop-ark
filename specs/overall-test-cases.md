@@ -219,7 +219,8 @@ hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps piNodeM
 | 调试参数 | `--ps piTestEnvFile <url|path>` | 测试态地址/账号/口令/API Key 的来源：电脑侧一次性 HTTP 端点（`hdc rport`），**不落设备存储** |
 | 执行器 | `payload/devtest/run.mjs` + `suites/*.mjs` | 按套件分派、隔离 compat/jit、写结果文件与 `SUMMARY` 行 |
 | 投放 | `node scripts/stage-devtests.mjs`（发布前 `--clean`） | 把 `payload/devtest/**` 与 `payload/jitless/**` 投进 `resfile/devtest/`（48 文件，秒级；**不入产品归档**） |
-| 结果回传 | `<filesDir>/devtest-results/<suite>-<ts>.json` + `payload/node.log` | 一行 `[devtest] SUMMARY {…}` 可 grep |
+| 结果回传 | `<filesDir>/devtest-results/<suite>-<ts>.json` + `payload/node.log` |
+| 形态报告 | `<filesDir>/payload/node-mode.json` | **每台设备都要有**：`mode`/`reason`/`flags`/`debugBuild`/`deviceType`/`deviceModel`/`osFullName`。手机（`JUY-AL80`）实测 `hilog` 对三方应用 0 行，形态判定只能从这里归因 | 一行 `[devtest] SUMMARY {…}` 可 grep |
 
 ```bash
 # 完整一次（凭据只经环境变量与本机临时文件，跑完删除）
@@ -274,6 +275,7 @@ stream 从不发 `end`/`close` ⇒ 完成信号用 `beforeExit`、计数按事�
 | B9 | 载荷归档 | `pi-web.tar.gz` **84,849,630 B** / 27,179 文件条目；sha256 见 `pi-web.version` | `stat` + `tar -tzf \| wc -l` |
 | B10 | 端口 | 每次启动从 `listen(0)` 取空闲端口（实测 33727/35711/36743/36885） | `pi-web.ready.json` |
 | B11 | 载荷幂等 | 载荷未变 ⇒ `payload ready (skip)`；变 ⇒ 新 `<sha12>/` 目录 | `node.log` |
+| B12 | **手机形态（`JUY-AL80`/API 26/`deviceType=phone`）** | compat 冷启 **1,616 ms**；`auto` 亦为 compat（权限位已授予但 jit 必 SIGTRAP，见 `108-jitless/spec.md` §8.1）；`hilog` 对三方应用不可见、`hdc fport` 登记后立即失效 | `payload/node-mode.json` + `payload/app.log` |
 
 ---
 
@@ -313,6 +315,7 @@ stream 从不发 `end`/`close` ⇒ 完成信号用 `beforeExit`、计数按事�
 | 2026-10-16 | 基线首轮（HAD-W24） | 建立 B1–B12 | `docs/000-工程规划.md` §10 附录 |
 | 2026-10-17 / 10-19 | 权限面收窄、压缩开关、零 ACL 评估 | 见 `docs/001-能力复刻评估.md` REV-5/6/7 + `docs/ACL-无ACL评估.md` | 同上 |
 | **2026-10-20** | **全模块一轮**：L0 门禁 + 108 PC 双形态单测（38×2）+ 204 单测（25）+ 204 远端双仓端到端 + 真实模型调用（compat）+ 真机 compat/jit 验收 | 见 [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) | `logs/20261020-1/` |
+| **2026-10-20 手机真机部署** | `deviceTypes` 扩为 2in1/tablet/**phone**/**tv**；华为畅享 90（JUY-AL80）装机成功、`auto`→compat 就绪 1,616 ms、路由全 200、ArkWeb 渲染进程与载荷端口 ESTABLISHED；发现并修掉「`auto` 以权限位判 jit ⇒ 手机 SIGTRAP 必崩」的缺陷 | 见 [`../logs/20261020-3/PHONE_REPORT.md`](../logs/20261020-3/PHONE_REPORT.md) | `logs/20261020-3/` |
 | **2026-10-20 第 2 轮（续）** | 设备侧真实会话：配置 DeepSeek Key + 建工作区 + 对话（SSE 逐块，compat/jit 各一轮）+ 图片附件（视觉模型 `deepseek-flash`：两张真实 PNG 描述互异、含中英文识读）+ code-mode 降级（compat `unavailable` 带结构化原因 / jit `available`） | 见 [`../logs/20261020-2/TEST_REPORT.md`](../logs/20261020-2/TEST_REPORT.md) §7 | `logs/20261020-2/` |
 | **2026-10-20 第 2 轮** | **全部用例改在真机执行**：新增设备侧执行通道（`piTestScript`/`piTestSuite`/`piTestEnvFile` + `hdc rport`）；108 双形态 14/14×2、photon 22+2×2、204 单元 26/0×2、204 端到端 22/5（远端受设备网络限制）、真实模型调用 2/2×2 | 见 [`../logs/20261020-2/TEST_REPORT.md`](../logs/20261020-2/TEST_REPORT.md) | `logs/20261020-2/` |
 | **2026-10-20（修复轮复验）** | 缺陷 D1–D3 修复后重装 `29ab4aca52e4` 载荷的 HAP：compat 就绪 **911 ms**、`/` `/api/web-auth` `/api/sessions` 均 **200**，设备侧扩展文件已含修复；jit 就绪 **871 ms**、`兼容层 active=false`、`WebAssembly=object` | [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) §康复验 | 同上 |
