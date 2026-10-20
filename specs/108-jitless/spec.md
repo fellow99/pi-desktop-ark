@@ -176,7 +176,7 @@
 | ArkWeb | ✅ 渲染进程 `…:render` 在跑；`/proc/net/tcp` 可见 `127.0.0.1:42777` LISTEN + 与渲染侧 **ESTABLISHED** 连接 ⇒ 页面确实连上了载荷服务 |
 | 形态证据 | `<filesDir>/payload/node-mode.json`：`mode=compat`、`reason` 含 `ALLOW_WRITABLE_CODE_MEMORY → 0（PERMISSION_GRANTED）；但权限位不能证明内核允许 JIT…`、`deviceType=phone`、`deviceModel=JUY-AL80` |
 | `hilog` | ⚠️ 该机对三方应用的 hilog **完全不可见**（`hilog -x` 中本应用 0 行）⇒ 排障改走 `node-mode.json` + `payload/app.log` |
-| `hdc fport` | ⚠️ 该机 `fport` 规则登记成功但**立即失效**（`fport ls` 为空），host→device HTTP 取证不可用；仅短窗口内偶发可用 |
+| `hdc fport` | ⚠️ 规则**只在创建它的那次 hdc 调用内有效**：跨调用后 `fport ls` 为空、`curl` 报 `ECONNREFUSED`。取证必须把「建规则 + 用规则」写进同一条命令（本轮常规/图片对话即按此完成） |
 
 ---
 

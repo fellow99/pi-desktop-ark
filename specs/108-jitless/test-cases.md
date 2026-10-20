@@ -177,6 +177,8 @@ release 包启动：
 | TC-108-17 形态判定（compat） | ✅ | `auto`（不带任何调试参数）⇒ `node-mode.json` 记录 `mode=compat`，依据串如实写「权限已授予但不足以证明 JIT 可用」 |
 | TC-108-18 启动到就绪 | ✅ | `PI_WEB_READY elapsedMs=1616`；`/` 与 `/api/web-auth` 均 200；ArkWeb 渲染进程在跑，`/proc/net/tcp` 有与载荷端口的 ESTABLISHED 连接 |
 | TC-108-22 jit 形态 | ❌ 该机不可用 | 该机权限位已授予但 jit 启动必 `SIGTRAP` 崩（本轮据此把 `auto` 收紧为 compat；要 jit 只能显式选择，且需在已证实设备上用） |
+| TC-108-19 真实对话（手机） | ✅ | 新建会话（`deepseek-flash`）→ SSE `200`，首事件 409 ms、17 个事件；`stopReason=stop`、`durationMs=1019`、回复「手机对话通」 |
+| TC-108-20 图片对话（手机） | ✅ | 同会话连发两张真实 PNG（3.4 MB / 4.3 MB）：第 1 张识读为「混凝土块状构件＋两个矩形开口＋深灰金属内件，无文字」（`usage in=1022/out=598`、5,755 ms、617 SSE 事件）；第 2 张识读为「地铁站站厅 6 组闸机＋青绿方柱＋橄榄绿导向带＋『免费专用通道』标牌」（`in=1098/out=757`、7,666 ms、776 事件），并主动指出「不是同一个物件，也不是同一场景」 |
 | 形态判定的持久证据 | ✅ 新增通道 | `<filesDir>/payload/node-mode.json`（mode/reason/flags/deviceType/deviceModel/osFullName）——本机 hilog 对三方应用不可见，只能靠它归因 |
 
 **口径更正**：本轮不再以「PC 侧 `node --jitless` 全绿」作为 `AC-108` 的证据 —— 同一份断言改为在设备上跑，
