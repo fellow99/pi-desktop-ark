@@ -136,6 +136,11 @@ installIfNeeded():
 
 ---
 
+> **2026-10-20 产品决策取代 D3 的"运行期可切"部分**：形态改为**编译期常量** `common/BuildConfig.ets` 的 `NODE_MODE`
+> （默认 `compat`），运行期**不再有** `probeFlags` / `piNodeMode` / 偏好设置 / ACL 探测参与决策。
+> 触发原因：手机 `JUY-AL80` 上「权限位已授予」仍按 jit 启动即 **SIGTRAP** 崩（详见 `specs/108-jitless/spec.md` FR-108-001
+> 与 [`ACL-无ACL评估.md`](ACL-无ACL评估.md) §10）；而 `--jitless` 是进程级形态、进程内 Node 失败即终态，运行期切换风险不可接受。
+
 ## 6. 可行性评估（含代价与未取证项）
 
 | 项 | 评估 |

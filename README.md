@@ -9,7 +9,7 @@
 | --- | --- |
 | 版别 | **HarmonyOS Edition**（`pi-desktop-ark`） |
 | 应用名（桌面/窗口标签）/ 包名 | Pi Desktop Ark / `org.fellow99.pi.PiDesktopArk` |
-| 目标设备 | `2in1` / `tablet`（不做 phone） |
+| 目标设备 | `2in1` / `tablet` / `phone` / `tv`（同一产物，四种形态均已声明；已在 2in1、tablet、phone 真机验证） |
 | 后端 | `@fellow99/node-bridge` 起的 Node v24.2.0（进程内，`dlopen` + `node::Start`） |
 | 前端 | ArkWeb 加载 `http://127.0.0.1:<port>/`（页面由本地服务渲染，同源零 CORS） |
 | 当前状态 | **骨架**：依赖接线与编译构建已通；载荷、鉴权、能力对齐待 Phase 1–3 |
@@ -21,10 +21,10 @@
 pi-desktop-ark/
 ├── AppScope/app.json5              # 包名 / 版本 / 图标
 ├── entry/                          # 主模块（HAP）
-│   ├── src/main/ets/entryability/  # EntryAbility（读 --ps probeFlags）
+│   ├── src/main/ets/entryability/  # EntryAbility（形态取编译期常量；--ps 仅设备侧用例通道）
 │   ├── src/main/ets/pages/Index.ets# 主界面：状态条 + ArkWeb（boot 页 → 本地服务页）
 │   ├── src/main/ets/app/           # PiDesktopRuntime：启动/探活编排（消费方逻辑）
-│   ├── src/main/ets/common/        # 常量与日志
+│   ├── src/main/ets/common/        # 常量与日志（含 BuildConfig：编译期形态开关）
 │   ├── src/main/resources/rawfile/ # boot.html（首屏，必须有）
 │   └── src/main/resources/resfile/pi-web/  # ← 应用载荷落点（gitignored，见其 README）
 ├── scripts/provision-runtime.sh    # 投放运行时（委托 ohos-node-bridge/tools/provision.mjs）
@@ -58,6 +58,29 @@ cmd //c "D:\oh-workspace\command-line-tools\bin\hvigorw.bat assembleHap --mode m
 > `hvigorfile.ts` 不会覆盖它：只有提供 `signing.<mode>.local.json` 或证书环境变量时才注入自己的材料，
 > 否则如实使用 `build-profile.json5` 里的配置（并补上 `products[].signingConfig` 指针 —— 少了这个指针，
 > 即便材料在也**静默产出未签名包**）。
+
+## 运行形态：**编译期固定为 compat（`--jitless`）**
+
+本版**不做运行期形态切换**，形态是构建期常量（`entry/src/main/ets/common/BuildConfig.ets` 的 `NODE_MODE`）：
+
+| 决策 | 内容 |
+| --- | --- |
+| ① **所有 `deviceTypes` 默认走 compat（`--jitless`）** | `2in1` / `tablet` / `phone` / `tv` 一视同仁，默认 `NODE_MODE = 'compat'` |
+| ② **不做运行期切换，只在编译期切换** | 运行期**没有**调试参数（`probeFlags` / `piNodeMode` 已移除）、没有设置项、没有 ACL 探测参与决策；出 jit 变体 = 改 `BuildConfig.NODE_MODE = 'jit'` 后重新构建 |
+| ③ **compat 形态禁用 code-mode** | 代码沙箱（`quickjs-wasi`）依赖 `WebAssembly`，compat 下自检即失败 ⇒ code-mode 工具**不注册**，本版不提供替代沙箱 |
+
+为什么是 compat：`--jitless` 是**进程级**形态，而进程内 Node 每进程只能起一次、失败即终态（`ohos-node-bridge` 契约 §2.6）——
+一次形态误判就是整机不可用。且实测证明"权限位授予"不能当 JIT 可用性预检：手机 `JUY-AL80` 上
+`ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY` 查询为**已授予**，按 jit 启动仍在 `libnode_bridge` 内
+**SIGTRAP** 秒崩（同一 HAP 改 compat 则 1.6 s 正常就绪）。
+
+compat 的代价（逐项核对见 [`docs/ACL-无ACL评估.md`](docs/ACL-无ACL评估.md) §10）：
+**真正缺失只有 code-mode**；其余是变慢（V8 热循环 7–10×、超限图重编码最坏 25–30 s）与调试信息降级（无 source map）；
+MCP 工具从"预声明"变为经 `tool_search` 按需发现（仍可用）。对话/SSE、图片与视觉识图、Git 扩展、文件与 `bash` 工具、
+ArkWeb 页面渲染**均不受影响**（同一份 WASM 依赖链已在载荷侧改掉：`next.config` 预编译 `.mjs`、纯 JS `fetch` 垫片、纯 JS `photon`）。
+
+每台设备的形态判定都会落盘为 `<filesDir>/payload/node-mode.json`（`mode` / `reason` / `flags` / `deviceType` / `deviceModel`），
+便于在没有 hilog 的机型（如手机）上归因。
 
 ## 运行时状态与被观测的事实
 

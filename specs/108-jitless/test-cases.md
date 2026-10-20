@@ -102,12 +102,15 @@ node scripts/assemble-payload.mjs --apply --force
 
 ## 三、真机（`HAD-W32` / API 26，需 hdc 在线）
 
-### TC-108-17 模式判定（compat）
+### TC-108-17 运行形态（编译期固定 compat）
 ```bash
-hdc shell aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps piNodeMode compat
+# 不带任何参数启动；形态由 BuildConfig.NODE_MODE 决定（默认 compat）
+hdc shell aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility
+hdc shell "cat <filesDir>/payload/node-mode.json"
 hdc shell "tail -50 <filesDir>/payload/app.log"
 ```
-期望：ArkTS 日志 `mode=compat（依据：piNodeMode 参数）`；载荷日志 `WebAssembly=undefined`；`execArgv` 含 `--jitless`。
+⚠️ 运行期**没有**切换入口：`--ps piNodeMode jit` 之类的参数**不再生效**（实测仍为 compat）。
+期望：`node-mode.json` 的 `reason` 形如「编译期常量 `BuildConfig.NODE_MODE=compat`（运行期不可切换）」；载荷日志 `WebAssembly=undefined`；`flags` 含 `--jitless`。
 
 ### TC-108-18 启动到就绪
 期望：`pi-web.ready.json` 写出，marker 端口可探活，ArkWeb 加载 `pi-web` UI 且可交互；记录**冷启动耗时**。
@@ -121,16 +124,17 @@ hdc shell "tail -50 <filesDir>/payload/app.log"
 ### TC-108-21 code-mode 降级
 期望：调用 code-mode 得到结构化错误（sandbox 错误），进程**不崩**，UI 可继续。
 
-### TC-108-22 jit 形态回归
-有 ACL Profile：
+### TC-108-22 jit 变体回归（编译期切换）
+把 `common/BuildConfig.ets` 的 `NODE_MODE` 改成 `'jit'` 后重新构建、重装：
 ```bash
-hdc shell aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps piNodeMode auto
+hdc shell aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility
+hdc shell "cat <filesDir>/payload/node-mode.json"   # 期望 mode=jit、flags 不含 --jitless
 ```
 期望：`mode=jit（依据：ACL 已授予）`、`execArgv` **不含** `--jitless`；启动/对话/图片与改造前一致。
 
-### TC-108-23 release 合规
+### TC-108-23 release 合规（调试通道不存在）
 release 包启动：
-期望：`probeFlags` 与 `piNodeMode` 均被忽略（日志留痕），模式只由偏好设置/ACL 决定。
+期望：`probeFlags` / `piNodeMode` **在代码中已不存在**（运行期无形态入口）；设备侧用例通道（`piTestScript` 等）在 release 下整条失效。
 
 ---
 

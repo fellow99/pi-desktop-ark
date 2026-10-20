@@ -35,28 +35,28 @@
 
 ## 3. 功能需求
 
-### FR-108-001 模式判定与切换（ArkTS 主进程侧）
+### FR-108-001 运行形态：**编译期固定**（ArkTS 主进程侧）
 
-解析顺序（首个命中为准）：
+**唯一开关**是构建期常量 `entry/src/main/ets/common/BuildConfig.ets` 的 `NODE_MODE`（`'compat'` | `'jit'`，**默认 `'compat'`**）。
 
-1. **`probeFlags`（仅 debug 构建）** —— 直接给出 Node 参数串，**绕过**模式判定（既有诊断通道，行为不变）；
-2. **want 参数 `piNodeMode`**（`jit` / `compat` / `auto`，仅 debug 构建生效）；
-3. **持久设置** `preferences('pi-settings')` 的 `nodeMode` 键（默认 `auto`）；
-4. **`auto`** ⇒ `abilityAccessCtrl.checkAccessTokenSync(tokenId, 'ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY')` **只用于出依据串**；无论授予与否**一律取 compat**。
+1. 运行期**不得**存在任何形态切换入口：没有 `probeFlags`、没有 want 参数 `piNodeMode`、没有偏好设置项、
+   没有 ACL 探测参与决策（`NodeMode.resolve()` 只读 `BuildConfig.NODE_MODE`）。
+2. 要 jit 变体 ⇒ 改常量后重新构建（并在 `AppScope/app.json5` 区分版本号/渠道）。
+3. ACL 探测 `probeJitAcl()` 仍保留，但**只用于出依据串与诊断报告**（`payload/node-mode.json`），不参与决策。
 
-> **2026-10-20 修订（手机真机实测推翻旧口径）**：旧版本按「`PERMISSION_GRANTED` ⇒ jit」实现，结果在
-> `JUY-AL80`（`deviceType=phone`，API 26）上该权限查询**确为已授予（`→ 0`）**，但按 jit 启动后进程在
-> `libnode_bridge` 内 **SIGTRAP(TRAP_BRKPT)** 秒崩（同一 HAP 以 compat 启动则可 1.6 s 就绪）。
-> ⇒ **权限位不是 JIT 可用性的预检**；一次误判的代价是整机不可用（`failed` 为终态，库契约 §2.6 不支持进程内重启），
-> 远重于 compat 的 7–10× 性能损失（功能完整）。
-> 因此：`auto` = 安全优先（compat）；**要 jit 必须显式选择** —— 调试参数 `piNodeMode jit`，或已证实可用设备上把
-> 设置项 `pi-settings.nodeMode` 设为 `jit`。
+> **2026-10-20 两次修订的由来**（都被真机实测推动，务必保留）：
+> ① 初版按「`PERMISSION_GRANTED` ⇒ jit」实现；在 `JUY-AL80`（`deviceType=phone`，API 26）上该权限查询
+> **确为已授予（`→ 0`）**，但按 jit 启动后进程在 `libnode_bridge` 内 **SIGTRAP(TRAP_BRKPT)** 秒崩
+> （同一 HAP 以 compat 启动可 1.6 s 就绪）⇒ **权限位不是 JIT 可用性的预检**。
+> ② 随后短暂改为「`auto` 一律 compat + 允许调试参数/设置项显式选 jit」；产品最终决策更进一步：
+> **运行期完全不切换**（`--jitless` 是进程级形态，而进程内 Node 每进程只起一次、失败即终态 ——
+> 库契约 §2.6；一次误判就整机不可用，代价远大于 compat 的 7–10× 变慢）。
 
 约束：
-- 判定结果必须写进日志（`onCreate` 一行 + hilog），且必须说明**依据**（哪个来源、ACL 探测返回什么）。
-- `compat` ⇒ 交给库的 Node 参数**必须包含 `--jitless`**，且必须位于脚本路径之前（库已保证：`flags` 全部排在 scriptPath 前）。
-- release 构建**忽略** `probeFlags` 与 `piNodeMode`（保持既有 F3/合规 G9 约束），只走 ③④。
-- 权限查询失败（抛异常）按 **compat** 处理（宁慢不崩）。
+- 形态与依据必须落盘：`<filesDir>/payload/node-mode.json`（`mode`/`reason`/`flags`/`debugBuild`/`deviceType`/`deviceModel`/`osFullName`），
+  因为部分机型（手机 `JUY-AL80`）对三方应用的 hilog 完全不可见。
+- `compat` ⇒ 交给库的 Node 参数**必须包含 `--jitless`**，且位于脚本路径之前（库保证 `flags` 全排在 scriptPath 前）。
+- 「所有 `deviceTypes` 默认 compat」是产品决策：`2in1` / `tablet` / `phone` / `tv` 不做设备间区分。
 
 ### FR-108-002 载荷侧自适应安装（Node 主线程）
 
@@ -136,7 +136,7 @@
 | AC-108-03 | PC 侧 undici 面 | compat 形态下 `import * as undici from "undici"` 得到具名导出，`install()` 后 `globalThis.fetch` **仍是**垫片 |
 | AC-108-04 | PC 侧图片 | compat 形态下：≤ 限制的 JPEG/PNG 走"零解码"早退；超限图能被缩放并重新编码 |
 | AC-108-05 | 组装门禁 | `assemble-payload --apply` 后：归档内无 `next.config.ts`、有可执行的 `next.config.mjs`；每个 `undici` 包的 `main` 指向条件入口 |
-| AC-108-06 | 真机 compat 启动 | 无 ACL Profile 装机、`piNodeMode=compat`（或 ACL 缺失自动）⇒ Node 起、Next 就绪、`pi-web` UI 可交互 |
+| AC-108-06 | 真机 compat 启动 | 直接装 compat 变体（`BuildConfig.NODE_MODE='compat'`，默认）⇒ Node 起、Next 就绪、`pi-web` UI 可交互 |
 | AC-108-07 | 真机 compat 对话 | 一次真实对话成功（`stopReason=stop`），SSE 流式可见 |
 | AC-108-08 | 真机 compat 图片 | 发一张图给模型成功（或被明确提示不受支持，且不影响对话） |
 | AC-108-09 | 真机 jit 回归 | 有 ACL Profile 下 `auto` ⇒ 判为 jit、不带 `--jitless`；启动/对话/图片与改造前一致 |
@@ -160,7 +160,7 @@
 | 1 | **PC 侧 compat 形态整链路已验证** ✅ | `node --jitless pi-web-launch.js`（用真实归档树）→ 兼容层安装（`node:http` 封印 5 个惰性 getter、fetch 垫片 installed、六个全局 kept）→ `undici.install()` 被判为空操作 → Next 起来 → 写就绪 marker → `本进程已就绪 http://127.0.0.1:64304/`（约 40 s） |
 | 2 | 图片面（纯 JS 垫片） | 「已达标」路径**零解码**（实测 `decodes=0`）；超限图 2000×1500 在 `--jitless` 下：JPEG 解码 ≈4.3 s、Lanczos3 →800×600 ≈3.6 s、PNG 编码 ≈2.9 s、JPEG(80) ≈3.8 s。上游 `tryEncodings` 会一次生成 PNG + 5 档 JPEG，最坏 ~25–30 s ⇒ 大图是慢路径，已加 >2000 ms 的 stderr 提示 |
 | 3 | vendor 体积 | `jpeg-js@0.4.4` + `pngjs@7.0.0` 合计 **152,977 B**（含 `VENDOR.json` 的逐文件 sha256），远低于 NFR-108-003 的 500 KB |
-| 4 | 设置项**写侧**未实现 | 偏好 `pi-settings.nodeMode` 只**读**；应用内暂无写入入口。手动切换目前靠 debug 的 `piNodeMode` want 参数；release 下由 ACL 探测（`auto`）决定 |
+| 4 | 运行期无形态入口（**产品决策**） | `probeFlags` / `piNodeMode` / 偏好设置三条入口已移除；形态只由 `BuildConfig.NODE_MODE` 决定。要 jit 只能是「编译期切换 + 重新构建」 |
 | 5 | 自检脚本不进发布归档 | `payload/jitless/selftest/` 在组装期被排除（属开发期工具），源码仍在库内供 TC-108-xx 复跑 |
 | 6 | 真机未验证（阻塞） | 本轮 `hdc list targets` 为空（设备未识别），AC-108-06…10 未取证；AC-108-01…05 已在 PC 侧完成 |
 
@@ -184,11 +184,11 @@
 
 | 用例 | 结果 | 读数 |
 |---|---|---|
-| TC-108-17 模式判定（compat） | ✅ | `piNodeMode compat` ⇒ 载荷日志 `jitless 兼容层：active=true（WebAssembly=undefined）`；惰性 getter 封印 5 项；`fetch=installed`；六个全局 `kept` |
+| TC-108-17 形态（编译期 compat） | ✅ | 直接启动（无任何参数）⇒ `node-mode.json` 的 `mode=compat`、`reason=编译期常量 BuildConfig.NODE_MODE=compat（运行期不可切换）`；载荷日志 `jitless 兼容层：active=true（WebAssembly=undefined）` |
 | TC-108-18 启动到就绪 | ✅ | 新载荷 `59877c2987b3` 解包 → `PI_WEB_READY {"port":36885,…,"elapsedMs":934}`；**解释器模式冷启动 ≈0.93 s**（PC 上 44 s 是首次 require 大树的差异，设备 `.next` 读取快） |
 | 路由可用性 | ✅ | `GET /` = 200（`<title>Pi Desktop</title>`）；`/api/web-auth` = 200；`/api/sessions` = 200 且返回 JSON（**该路由会 import `@earendil-works/pi-coding-agent` ⇒ 其 `import * as undici` 走的就是条件入口**，未触发 npm undici 的 WASM 错） |
 | UI 渲染 | ✅ | `uitest dumpLayout` 文本含 pi-web 真实界面：「新建 / 搜索对话 / 会话 / 文件 / 文件操作 / 打开其他项目…」⇒ ArkWeb 正常加载 compat 形态服务 |
-| TC-108-22 jit 回归 | ✅ | `piNodeMode auto`（该机 ACL 已授予）⇒ `active=false（WebAssembly=object）`、无报错、`elapsedMs=926` |
+| TC-108-22 jit 变体 | ✅（历史，编译期切换前的口径） | 平板 `HAD-W32`（ACL 已授予）曾以 jit 运行：`active=false（WebAssembly=object）`、`elapsedMs=926`；改动后 jit 只能由 `NODE_MODE='jit'` 的变体验证 |
 | 已知问题 K1 | ⚠️ | compat 形态每次冷启会在 app.log 留一条 `unhandledRejection: WebAssembly is not defined`（栈顶 `lazyllhttp` ← `node:internal/deps/undici`，由 **Next 启动链读取惰性全局**触发）。**不影响功能**（随后 `GET /api/web-auth` 200、就绪正常）。jit 形态无此条（对照实验已做） |
 | K1 的失败修法（已回滚） | ❌ | 试过"compat 下用垫片类接管 `Headers/Request/Response/FormData/Blob/File`"⇒ 该报错**依旧**，且 **Next 路由全部 500**（`NextResponse` 继承 `globalThis.Response`，最小垫片不满足其语义）。已回滚，代码里留了完整注释与后续方向（预载 `internal/deps/undici/undici`，需 `--expose-internals`，参见 dshm 的 `installInternalUndiciShim`） |
 | TC-108-19…21 | ⬜ | 真实对话需模型凭据（设备未配置）；图片与 code-mode 未在真机逐项触发。已在 PC 侧以真实上游代码路径覆盖 |

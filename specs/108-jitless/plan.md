@@ -1,5 +1,7 @@
 # plan.md —— `108-jitless` 实现方案
 
+> ⚠️ **口径更新（2026-10-20）**：本文是**方案阶段**记录。实现最终把形态改为**编译期常量**（`common/BuildConfig.ets` 的 `NODE_MODE`，默认 `compat`），**运行期不再有** `piNodeMode` / `probeFlags` / 偏好设置入口；`common/Constants.ets` 也没有保留 `PI_NODE_MODE_PARAM`。以 `spec.md` FR-108-001 与 `README.md`「运行形态」一节为准。
+
 > 对应需求：[`spec.md`](spec.md)。方案决策与反证记录见 [`../../docs/108-jitless-方案决策.md`](../../docs/108-jitless-方案决策.md)。
 
 ## 1. 总体结构

@@ -238,3 +238,67 @@ hdc shell "find /data/app/el2/100/base/org.fellow99.pi.PiDesktopArk/haps/entry/f
 
 **结论**：本版**保留** `kernel.ALLOW_WRITABLE_CODE_MEMORY`，零 ACL 作为一条有明确代价与执行清单的**备选路线**留档。
 若未来需要上手机/平板档（ACL 申请不下来），按 §8 的 P0→P5 逐阶段推进，每阶段的判据必须真机实测，不得以"应该可以"代替。
+
+---
+
+## 10. compat（`--jitless`）形态的功能核对结果
+
+> 结论先行：**真正缺的功能只有 code-mode 一项**；其余是"退化"（变慢）与"调试信息降级"，另有 MCP 工具的**用法变化**。
+> 依据 = 设备实测（`HAD-W32` 平板 / `JUY-AL80` 手机，Node v24.2.0，载荷 `29ab4aca52e4`）+ 载荷依赖面逐项核对。
+> 完整原始输出见 `logs/20261020-2/TEST_REPORT.md`、`logs/20261020-3/PHONE_REPORT.md`。
+
+### 10.1 真正的功能缺失（1 项）
+
+| 功能 | compat 下状态 | 证据 |
+|---|---|---|
+| **code-mode（JS 代码沙箱工具）** | ❌ 不可用：工具**不注册**，模型无法"写一段 JS 批量编排工具" | 设备 `GET /api/mcp` → `codemode.sandbox = {state:"unavailable", error:"… Failed to load QuickJS: Cannot read properties of undefined (reading 'compile')"}`；jit 下同一自检 `{state:"available"}`。上游代码：`pi-web/lib/builtin-extensions.ts` 在 `sandbox.available === false` 时用 `unavailableExtension` 替代 code-mode |
+
+连带影响（同源）：
+
+| 影响面 | 说明 | 依据 |
+|---|---|---|
+| 子代理 | 配置了 code-mode 的 subagent profile 加载即失败（`Code mode is unavailable: <reason>`），以无 code-mode 方式运行 | `lib/builtin-extensions.ts:402-404` |
+| **MCP 工具（用法变化，非消失）** | MCP server 默认 `exposure: codemode`，compat 下被自动降级为 `deferred`；SDK 对 `deferred` 的定义是「不预先声明，等 `tool_search` 取回后可直接调用，**不需要 code-mode**」⇒ 工具仍可用，但模型须先调一次 `tool_search` | `lib/mcp-host.ts:180-189`（`withReachableExposure`）+ `pi-agent/dist/extensions/mcp/index.js:47` |
+
+### 10.2 性能退化（能用，但慢）
+
+| 场景 | jit | compat | 备注 |
+|---|---|---|---|
+| V8 热循环 | 基准 | **7–10× 慢** | `ohos-node-bridge/docs/000-工程规划.md` §D.10 |
+| 图片重编码（仅"超限图"触发） | 2,100 ms（photon 套件全套） | **31,221 ms** | 平板 `devtest` 实测，≈15×；`108-photon` 22 通过 / 2 跳过 |
+| 单步拆解（PC `--jitless`） | — | JPEG 解 ≈4.3 s / Lanczos3→800×600 ≈3.6 s / PNG 编码 ≈2.9 s / JPEG(80) ≈3.8 s；上游一次生成 PNG+5 档 JPEG ⇒ **最坏 25–30 s** | `specs/108-jitless/spec.md` §7；已加 >2000 ms 的 stderr 提示 |
+| 冷启动到就绪 | 871–926 ms | 885–969 ms（平板）/ 1,616 ms（手机） | 基本无差异 |
+
+**重要**：图片"已达标"路径**零解码**（`decodes=0`），常见情况不受影响；视觉模型看图是**原图直传**，不经过重编码
+（`deepseek-flash` 识图实测：`usage.input=1028`、9,982 ms，识读中英文标识正确）。
+
+### 10.3 调试信息降级
+
+`next/dist/compiled/source-map08/mappings.wasm` 不可用 ⇒ 错误栈不做 source map 解码，报错指向打包后位置。
+用户无感，排障时更难读（`specs/108-jitless/spec.md` FR-108-007 已登记为"可接受"）。
+
+### 10.4 已知无害噪声
+
+compat 冷启固定一条 `unhandledRejection: WebAssembly is not defined`（栈在 Node 内建 undici 的 `lazyllhttp`，代号 K1）。
+进程存活、随后就绪 200 ⇒ 只是日志噪声。
+
+### 10.5 明确**不受影响**的部分（均本轮实测）
+
+ArkWeb 页面渲染（独立进程的 JS 引擎，与 V8 jitless 无关）· 对话与 SSE 流式 · 真实模型调用
+（非流式 203 ms / 流式 722 ms，8 块 / 21–30 个 SSE 事件）· 图片附件与视觉识图 · Git 扩展（21+1 工具、
+本地链 17 步、凭据脱敏）· 文件/搜索/`bash` 工具（真机 `echo $((2+2))` → `4`）· 会话管理与设置。
+
+原因：三条 WASM 硬门已经在**载荷侧**改掉 —— `next.config` 预编译成 `.mjs`（绕开 WASM SWC）、`fetch` 用纯 JS 垫片
+（原生 llhttp + `node:stream/web`）、`photon` 换纯 JS（`jpeg-js` + `pngjs` + 自研 Lanczos3）。
+
+### 10.6 由本核对导出的产品决策（已落地）
+
+| 决策 | 落地位置 |
+|---|---|
+| 所有 `deviceTypes`（2in1 / tablet / phone / tv）**默认走 compat（`--jitless`）** | `entry/src/main/ets/common/BuildConfig.ets` 的 `NODE_MODE = 'compat'` |
+| **不做运行期切换，只在编译期切换** | `NodeMode.resolve()` 只读 `BuildConfig.NODE_MODE`；`probeFlags` / `piNodeMode` / 偏好设置三条运行期入口**已移除**（手机实测：传 `--ps piNodeMode jit` 仍为 compat） |
+| compat 形态**禁用 code-mode** | 由沙箱自检失败 ⇒ 工具不注册（上游行为），本版不提供替代沙箱 |
+
+> 为什么不是"默认 jit、ACL 探测兜底"：手机 `JUY-AL80` 上 `ALLOW_WRITABLE_CODE_MEMORY` 查询**已授予**，但按 jit 启动
+> 进程在 `libnode_bridge` 内 **SIGTRAP(TRAP_BRKPT)** 秒崩（同一 HAP 改 compat 1.6 s 就绪）⇒ 权限位不是 JIT 可用性的预检；
+> 而一次误判 = 终态 `failed`（进程内 Node 不能重启），代价远大于 compat 的 7–10× 变慢。
