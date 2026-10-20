@@ -1,27 +1,24 @@
-import { abilityAccessCtrl, bundleManager, common, Permissions } from '@kit.AbilityKit';
-import { preferences } from '@kit.ArkData';
+import { abilityAccessCtrl, bundleManager, Permissions } from '@kit.AbilityKit';
 import { Log } from './Constants';
+import { NODE_MODE } from './BuildConfig';
 
 /**
- * 108-jitless：**Node 运行形态判定**（jit / compat）。
+ * 108-jitless：**Node 运行形态**（jit / compat）。
  *
- * 为什么需要它：无 ACL（`ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY` 未授予）时，
- * V8 只能以 `--jitless` 运行 ⇒ `WebAssembly` 整个对象不存在 ⇒ 载荷里凡依赖 WASM 的模块
- * （Next 的 SWC、undici 的 llhttp、photon）全部失效，**当前形态是启动即崩**（约 0.5 s 后 SIGABRT），
- * 不是"变慢"。反向也成立：有 ACL 却带 `--jitless` 会白白损失 7–10× 性能。
- * 因此形态必须**按设备事实**决定，而不是写死一个默认值。
+ * 背景：无 ACL（`ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY` 未授予）时 V8 只能 `--jitless`
+ * 运行 ⇒ `WebAssembly` 整个对象不存在 ⇒ 载荷里依赖 WASM 的模块（Next 的 SWC、undici 的 llhttp、
+ * photon、quickjs）全部失效；无 ACL 却按 jit 起就是**启动即崩**（SIGTRAP/SIGABRT），不是"变慢"。
  *
- * 判定顺序（首个命中为准，见 `specs/108-jitless/spec.md` FR-108-001）：
- *   ① `probeFlags`（仅 debug，直接给整串 flags ⇒ 绕过本判定，由 `EntryAbility` 处理）
- *   ② want 参数 `piNodeMode`（仅 debug；`jit` / `compat` / `auto`）
- *   ③ 持久设置 `preferences('pi-settings').nodeMode`（默认 `auto`）
- *   ④ `auto` ⇒ 权限探测：已授予 ⇒ jit；未授予/查询失败 ⇒ compat（宁慢不崩）
+ * **形态由编译期常量决定**（`BuildConfig.NODE_MODE`，默认 `compat`）—— 运行期**没有**调试参数、
+ * 没有设置项、没有 ACL 探测参与决策（2026-10-20 产品决策：不做运行时切换，只在编译期切换）。
+ * 理由：`--jitless` 是进程级形态，而进程内 Node 每进程只能起一次、失败即终态（库契约 §2.6），
+ * 一次误判 = 整机不可用；权限位也不足以预检（手机 `JUY-AL80` 上 granted 仍 SIGTRAP，见
+ * `docs/ACL-无ACL评估.md` §10）。
  *
  * 纪律：本文件**不引 UI、不写全局状态**（只用 `Log` 打事实），因此可以脱离页面推演。
  */
 
 /** 形态常量（与 `specs/108-jitless/spec.md` §2 术语一致） */
-export const NODE_MODE_AUTO: string = 'auto';
 export const NODE_MODE_JIT: string = 'jit';
 export const NODE_MODE_COMPAT: string = 'compat';
 
@@ -29,11 +26,6 @@ export const NODE_MODE_COMPAT: string = 'compat';
 const BASE_FLAGS: string = '--no-verify-heap';
 const JITLESS_FLAG: string = '--jitless';
 
-/** 调试 want 参数名（仅 debug 构建生效，见合规 G9） */
-const PARAM_NODE_MODE: string = 'piNodeMode';
-/** 持久设置：偏好文件名与键名（应用内切换入口写入它） */
-const PREF_NAME: string = 'pi-settings';
-const PREF_KEY_NODE_MODE: string = 'nodeMode';
 /** JIT 所需的 ACL（`system_basic` + `provisionEnable`，见 module.json5 与 docs/ACL配置.md） */
 const ACL_WRITABLE_CODE_MEMORY: string = 'ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY';
 
@@ -100,74 +92,19 @@ export function probeJitAcl(): AclProbe {
   }
 }
 
-/** 读取持久设置里的形态偏好（读不到 / 非法值 ⇒ `auto`，不阻断启动） */
-export function readPreferredMode(context: common.UIAbilityContext): string {
-  try {
-    const store: preferences.Preferences = preferences.getPreferencesSync(context, { name: PREF_NAME });
-    const raw: preferences.ValueType = store.getSync(PREF_KEY_NODE_MODE, NODE_MODE_AUTO);
-    const value: string = typeof raw === 'string' ? raw as string : NODE_MODE_AUTO;
-    if (value === NODE_MODE_JIT || value === NODE_MODE_COMPAT || value === NODE_MODE_AUTO) {
-      return value;
-    }
-    Log.warn('NodeMode：偏好设置 nodeMode=' + value + ' 非法，按 auto 处理');
-    return NODE_MODE_AUTO;
-  } catch (e) {
-    Log.info('NodeMode：读取偏好设置失败（按 auto 处理）：' + JSON.stringify(e));
-    return NODE_MODE_AUTO;
-  }
-}
-
-/** 从 want 参数里取调试形态覆盖（只认三个合法值；其余忽略并留痕） */
-function modeFromWant(params: Record<string, Object> | undefined): string {
-  if (params === undefined) {
-    return '';
-  }
-  const raw: Object | undefined = params[PARAM_NODE_MODE];
-  if (raw === undefined) {
-    return '';
-  }
-  const value: string = String(raw);
-  if (value === NODE_MODE_JIT || value === NODE_MODE_COMPAT || value === NODE_MODE_AUTO) {
-    return value;
-  }
-  Log.warn('NodeMode：want 参数 ' + PARAM_NODE_MODE + '=' + value + ' 非法（只认 jit/compat/auto），已忽略');
-  return '';
-}
-
 /**
- * 解析本次启动形态。
+ * 解析本次启动形态 —— **只认编译期常量**（`common/BuildConfig.ets` 的 `NODE_MODE`）。
  *
- * @param context UIAbilityContext（读偏好设置、探测 ACL）
- * @param debugBuild `applicationInfo.debug`（release 一律忽略调试通道，合规 G9）
- * @param wantParams want.parameters（可能为 undefined）
+ * 2026-10-20 产品决策：运行期**不做任何**形态切换。这里仍然做一次 ACL 探测，但**只用于出依据串 /
+ * 诊断报告**（`payload/node-mode.json`），不参与决策 —— 因为手机实测已证明「权限位授予 ≠ 内核允许 JIT」
+ * （`JUY-AL80` 上 granted 仍 SIGTRAP，见 `docs/ACL-无ACL评估.md` §10）。
+ *
+ * 切到 jit 的唯一方式：把 `BuildConfig.NODE_MODE` 改成 `'jit'` 后重新构建。
  */
-export function resolve(context: common.UIAbilityContext,
-  debugBuild: boolean, wantParams: Record<string, Object> | undefined): NodeModeDecision {
-  if (debugBuild) {
-    const fromWant: string = modeFromWant(wantParams);
-    if (fromWant.length > 0 && fromWant !== NODE_MODE_AUTO) {
-      return new NodeModeDecision(fromWant, '调试参数 ' + PARAM_NODE_MODE + '=' + fromWant);
-    }
-  }
-
-  const preferred: string = readPreferredMode(context);
-  if (preferred !== NODE_MODE_AUTO) {
-    return new NodeModeDecision(preferred, '偏好设置 ' + PREF_NAME + '.' + PREF_KEY_NODE_MODE
-      + '=' + preferred);
-  }
-
+export function resolve(): NodeModeDecision {
   const probe: AclProbe = probeJitAcl();
-  /*
-   * 2026-10-20 手机真机（`JUY-AL80` / API 26）实测：**权限位授予 ≠ 内核真允许 JIT** ——
-   * 该机 `ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY` 查询为已授予，但按 jit 启动后
-   * 进程在 `libnode_bridge` 里 **SIGTRAP(TRAP_BRKPT)** 秒崩（同一 HAP 改 compat 则可正常就绪 1.6 s）。
-   * 也就是说这个权限位**不能**作为 JIT 可用性的预检；而一次误判的代价是整机不可用（终态 failed，
-   * 库契约 §2.6：进程内 Node 无法自动重启），远重于 compat 的性能损失（7–10×，但功能完整）。
-   * ⇒ `auto` 一律取 compat（宁慢不崩）；要 jit 必须**显式**选择：调试参数 `piNodeMode jit`
-   * 或偏好设置 `pi-settings.nodeMode=jit`（在已证实可用的设备上）。依据串里保留权限读数，便于归因。
-   */
-  const detail: string = probe.granted
-    ? 'ACL 探测：' + probe.detail + '；但权限位不能证明内核允许 JIT（手机实测仍 SIGTRAP），auto 保守取 compat'
-    : 'ACL 探测（auto 兜底）：' + probe.detail;
-  return new NodeModeDecision(NODE_MODE_COMPAT, detail);
+  const built: string = NODE_MODE === NODE_MODE_JIT ? NODE_MODE_JIT : NODE_MODE_COMPAT;
+  const detail: string = '编译期常量 BuildConfig.NODE_MODE=' + built
+    + '（运行期不可切换）｜诊断读数：' + probe.detail;
+  return new NodeModeDecision(built, detail);
 }

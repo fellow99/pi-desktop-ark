@@ -17,8 +17,9 @@ import { PiDesktopRuntime } from '../app/PiDesktopRuntime';
  *
  * 单实例由 `module.json5` 的 `launchType: "singleton"` 保证（硬约束 ⑰：多实例会互抢端口与数据目录）。
  *
- * 支持命令行传参（调试用）：
- *   aa start -a EntryAbility -b org.fellow99.pi.PiDesktopArk --ps probeFlags "--jitless --no-verify-heap"
+ * 运行形态（jit / compat）由**编译期常量** `common/BuildConfig.ets` 的 `NODE_MODE` 决定 ——
+ * 运行期没有任何形态切换入口（无 probeFlags、无 piNodeMode、无设置项）。
+ * 仍有 `--ps` 调试通道，但只用于**设备侧用例执行**（`piTestScript` / `piTestSuite` / `piTestEnvFile`，仅 debug）。
  */
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
@@ -28,45 +29,19 @@ export default class EntryAbility extends UIAbility {
       Log.error('setColorMode 失败：' + JSON.stringify(e));
     }
 
-    // F3（合规 G9）：`probeFlags` 是一个**调试通道**，release 构建里必须不存在。
-    // 判定依据 = 应用自己的 debug 标志（`applicationInfo.debug`，由构建器写入；release 恒为 false）。
+    /*
+     * 108-jitless：运行形态在**编译期**定死（`common/BuildConfig.ets` 的 `NODE_MODE`，默认 compat）。
+     *
+     * 运行期不做切换的理由：`--jitless` 是进程级形态，而进程内 Node 每进程只能起一次、失败即终态
+     * （`ohos-node-bridge` 契约 §2.6）—— 一次误判就是整机不可用；"权限位授予"也不足以预检
+     * （手机 `JUY-AL80` 实测 granted 仍 SIGTRAP，见 `docs/ACL-无ACL评估.md` §10）。
+     */
     const debugBuild: boolean = this.context.applicationInfo.debug;
     const params: Record<string, Object> | undefined = want.parameters;
-
-    /*
-     * 108-jitless：先定**运行形态**（jit / compat），再定 flags。
-     *
-     * 为什么不能固定 `--no-verify-heap`：没有 ACL 的设备上 V8 走 JIT 会直接 SIGTRAP/SIGABRT
-     * （真机实测：`--jitless` 之外没有第二条活路），而有 ACL 时带 `--jitless` 又白白损失 7–10×。
-     * 形态判定与依据见 `common/NodeMode.ets`（顺序：probeFlags > piNodeMode > 偏好设置 > ACL 探测）。
-     */
-    const decision: NodeMode.NodeModeDecision = NodeMode.resolve(this.context, debugBuild, params);
-    let flags: string = decision.flags();
-    /*
-     * probeFlags 覆盖：直接给整串 Node 参数，**优先级最高**（既有诊断通道，行为不变）。
-     * 注意它会让"形态"与"实际 flags"脱钩（例如 probeFlags 里没有 `--jitless` 但是 compat 形态），
-     * 所以覆盖时必须把 mode 标成 `custom` 并把真实 flags 写进依据 —— 否则诊断面板会说反话。
-     */
-    let modeForUi: string = decision.mode;
-    let reasonForUi: string = decision.reason;
-    if (debugBuild) {
-      if (params !== undefined) {
-        const raw: Object | undefined = params['probeFlags'];
-        if (raw !== undefined) {
-          const s: string = raw as string;
-          if (s.length > 0) {
-            flags = s;
-            modeForUi = 'custom';
-            reasonForUi = '调试参数 probeFlags 直接给出 flags=' + s
-              + '（形态判定结果 ' + decision.mode + ' 已被绕过）';
-          }
-        }
-      }
-    } else {
-      // release：**忽略**调试参数，并留下一条可查的说明（不是静默丢弃）
-      Log.info('probeFlags / piNodeMode 调试通道在 release 构建中已禁用（applicationInfo.debug=false）：'
-        + 'want.parameters 一律忽略，形态由偏好设置/ACL 探测决定');
-    }
+    const decision: NodeMode.NodeModeDecision = NodeMode.resolve();
+    const flags: string = decision.flags();
+    const modeForUi: string = decision.mode;
+    const reasonForUi: string = decision.reason;
     AppStorage.setOrCreate<string>('nodeFlags', flags);
     AppStorage.setOrCreate<string>('nodeMode', modeForUi);
     AppStorage.setOrCreate<string>('nodeModeReason', reasonForUi);
