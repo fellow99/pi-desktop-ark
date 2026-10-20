@@ -160,19 +160,19 @@
 
 | 引用 | 内容 | 本轮结果 |
 |---|---|---|
-| [`108-jitless/test-cases.md`](108-jitless/test-cases.md) §一 TC-108-01…14 | PC 侧 compat/jit 双形态（fetch 14 例 + photon 24 例） | ✅ 全通过（两形态各 38 例） |
+| [`108-jitless/test-cases.md`](108-jitless/test-cases.md) §四 TC-108-01…14 | **设备侧**双形态（fetch 14 例 + photon 24 例，各自启动应用） | ✅ fetch 14/14（compat 415 ms / jit 437 ms）；photon 22 过 + 2 跳过（compat 31.2 s / jit 2.1 s） |
 | 同 §二 TC-108-15/16 | 组装门禁（config 预编译 + 条件入口 + ESM 导出门禁） | ✅ 通过 |
-| 同 §三 TC-108-17…22 | 真机 compat / jit / auto | ✅ 通过（compat 就绪 885–934 ms；jit 零回归） |
+| 同 §四 TC-108-17…22 | 真机 compat / jit / auto | ✅ 通过（compat 就绪 871–951 ms；jit 零回归且真实模型调用 2/2） |
 | [`108-jitless/spec.md`](108-jitless/spec.md) §8 K1 | compat 启动期一条无害 `unhandledRejection` | ⚠️ 已知问题（已定位根因，修法已试并回滚，留后续方案） |
 
 ### 2.10 `204` Git 插件（**索引，细节见模块文档**）
 
 | 引用 | 内容 | 本轮结果 |
 |---|---|---|
-| [`204-plugin-git/test-cases.md`](204-plugin-git/test-cases.md) §1 TC-A01…A06 | ark 增量（同步幂等 / V2 头注 / v24 加载 / 仓库操作 / 入 tar / 编译） | ✅ A03/A04/A05/A06 通过；A01/A02 见模块文档 |
-| [`../../pi-desktop-hos/specs/204-plugin-git/test-cases.md`](../../pi-desktop-hos/specs/204-plugin-git/test-cases.md) §1 TC-H01…H09 | 主机层（凭据/围栏/方言/url/diff/status） | ✅ 25 项通过、1 项跳过（本机不允许建软链） |
-| 同 §2 TC-L01…L08 | 加载冒烟与本地仓库链 | ✅ 22 工具注册；本地链 16 步通过 |
-| 同 §4 TC-D01…D10 | 真机回归 | ⚠️ D01 部分（扩展已物化）；D02/D04 已在 **PC 侧**以真实远端验证；真机侧需模型驱动，未执行 |
+| [`204-plugin-git/test-cases.md`](204-plugin-git/test-cases.md) §1 TC-A01…A06 | ark 增量（同步幂等 / V2 头注 / v24 加载 / 仓库操作 / 入 tar / 编译） | ✅ A01…A06 通过（A06 = 131,167,056 B） |
+| [`../../pi-desktop-hos/specs/204-plugin-git/test-cases.md`](../../pi-desktop-hos/specs/204-plugin-git/test-cases.md) §1 TC-H01…H09 | 主机层（凭据/围栏/方言/url/diff/status） | ✅ **设备侧 26 项通过 / 0 失败**（跑物化后的那份语例，两形态各一遍） |
+| 同 §2 TC-L01…L08 | 加载冒烟与本地仓库链 | ✅ **设备侧本地链 17 步全通**（含围栏越界被结构化拒绝） |
+| 同 §4 TC-D01…D10 | 真机回归 | ⚠️ D01 设备侧通过（扩展 + `tests/` 已物化）；**D02/D04 在设备上受网络限制**：探针实测 `github.com` 20 s 超时、内网域名 `getaddrinfo ENOTFOUND`、同主机 IP 不可达 ⇒ 结论为环境而非代码；D03/D06 设备侧通过 |
 
 ---
 
@@ -207,6 +207,35 @@ hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps piNodeM
 **取证纪律**：每轮必须同时留「原始输出」+「复现命令」；证据落 [`../logs/<YYYYMMDD>-N/`](../logs/)；
 沙箱内文件 `hdc` 只读（debug 签名也不行）⇒ 涉及运行期写入的结论只能从应用域或 HTTP 端点取。
 
+### 3.1 设备侧用例执行通道（**纯 JS 断言必须在设备上跑**，2026-10-20 第 2 轮起）
+
+设备上没有可执行的 `node`（`libnode.so` 只能被应用进程 `dlopen`），所以「108 兼容层 / 204 工具链 / 真实模型调用」
+这类纯 JS 用例，PC 上跑绿**不算**证据。做法是让应用**把自己的 Node 入口换成语例脚本**：
+
+| 元件 | 位置 | 说明 |
+|---|---|---|
+| 调试参数 | `--ps piTestScript devtest/run.mjs` | 仅 debug 构建生效（`applicationInfo.debug=false` 时整条失效，合规 G9）；相对 `context.resourceDir` 或以 `/` 开头的绝对路径 |
+| 调试参数 | `--ps piTestSuite 108-fetch` | 选套件：`108-fetch`/`108-photon`/`204-unit`/`204-e2e`/`204-remote`/`model`/`probe`/`all`。**单独给**是因为 108 的两支要自己安装兼容层并断言安装日志，执行器不能预装 |
+| 调试参数 | `--ps piTestEnvFile <url|path>` | 测试态地址/账号/口令/API Key 的来源：电脑侧一次性 HTTP 端点（`hdc rport`），**不落设备存储** |
+| 执行器 | `payload/devtest/run.mjs` + `suites/*.mjs` | 按套件分派、隔离 compat/jit、写结果文件与 `SUMMARY` 行 |
+| 投放 | `node scripts/stage-devtests.mjs`（发布前 `--clean`） | 把 `payload/devtest/**` 与 `payload/jitless/**` 投进 `resfile/devtest/`（48 文件，秒级；**不入产品归档**） |
+| 结果回传 | `<filesDir>/devtest-results/<suite>-<ts>.json` + `payload/node.log` | 一行 `[devtest] SUMMARY {…}` 可 grep |
+
+```bash
+# 完整一次（凭据只经环境变量与本机临时文件，跑完删除）
+node scripts/stage-devtests.mjs
+hvigorw assembleHap --mode module -p product=default -p buildMode=debug --no-daemon
+hdc install -r entry/build/default/outputs/default/entry-default-signed.hap
+node <临时目录>/envsrv.mjs <临时环境文件> 19000 &
+hdc rport tcp:19000 tcp:19000
+hdc shell "aa force-stop org.fellow99.pi.PiDesktopArk"
+hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps piNodeMode compat   --ps piTestScript devtest/run.mjs --ps piTestSuite 108-fetch --ps piTestEnvFile http://127.0.0.1:19000/env.json"
+hdc shell "tail -40 $FILES/payload/node.log"
+```
+
+**已知口径限制**（写进结果，不猜）：`node:test` 的事件里 `data` 是空对象、显式 `reporter:'tap'` 一条都不跑、
+stream 从不发 `end`/`close` ⇒ 完成信号用 `beforeExit`、计数按事件累加，**区分不出 skip**（跳过的子用例同样发 `test:pass`）。
+
 ---
 
 ## 4. 禁止的判据（与宪法 A7 同源）
@@ -220,6 +249,7 @@ hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps piNodeM
 | 「目录存在」判载荷就位 | 会掩盖就地升级失效 | 内容级 marker（`pi-web.version` 的 SHA-256） |
 | 「重试后成功」掩盖首次失败 | 掩盖真实失败面 | 首次失败必须单独取证 |
 | 只跑 debug 而声称 release 行为 | 调试通道/日志级别不同 | release 构建单独跑 `TC-107-005` |
+| **PC 上跑同一份语例**当设备证据 | PC 的 `--jitless` 只是近似：沙箱路径、DNS/网络、进程形态都不同 | 用 §3 的设备侧执行通道在**设备上的 Node**里跑（2026-10-20 第 2 轮起） |
 
 > **2026-10-20 更正**：`uitest dumpLayout` 在本机**可用**（`-p <file>` + `hdc file recv`；此前"拿不到结果"是旧调用方式所致）。
 > 它现在是**合法取证通道**；但 `dumpLayout` 只反映 ArkUI 树 —— Web 页内容以其中的文本节点为准，**不可**据此断言渲染细节（那仍需截图）。
@@ -236,10 +266,10 @@ hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps piNodeM
 | B1 | Node | `v24.2.0` / `platform=openharmony` / `arch=arm64` / `modules=137` | `node.log` 的 `[bootstrap]` 行 |
 | B2 | **JIT/WASM（ACL 生效）** | jit 形态：`WebAssembly=object`、`兼容层 active=false` | `app.log` |
 | B3 | **compat 形态** | `--jitless`：`WebAssembly=undefined`、`兼容层 active=true`、惰性 getter 封印 5 项 | `app.log` |
-| B4 | 就绪耗时 | compat **885–934 ms**、jit **871–926 ms**（`elapsedMs`，载荷入口→就绪；修复轮复验 compat 911 ms / jit 871 ms） | `app.log` 的 `PI_WEB_READY` |
+| B4 | 就绪耗时 | compat **885–951 ms**、jit **871–926 ms**（`elapsedMs`，载荷入口→就绪；第 2 轮设备侧复验 compat 911/951 ms、jit 871 ms） | `app.log` 的 `PI_WEB_READY` |
 | B5 | 崩溃 | `hilog` 中 `Cpp Crash` **0 命中** | `hilog` |
 | B6 | 沙箱路径 | `filesDir=/data/storage/el2/base/haps/entry/files`；载荷 `<filesDir>/payload/<sha12>/` | `app.log` |
-| B7 | 签名 HAP | **131,159,826 B**；`libs/arm64-v8a/` 4 个 `.so` 均 `compress_type=8` | `ls -l` + HAP 清单 |
+| B7 | 签名 HAP | **131,167,056 B**（含调试通道代码、**不含**语例脚本）；`libs/arm64-v8a/` 4 个 `.so` 均 `compress_type=8` | `ls -l` + HAP 清单 |
 | B8 | 装机失败样例 | `code:9568289 / PermissionName: ohos.permission.READ_PASTEBOARD`（Profile 缺该 ACL 项时） | `hdc install -r`（历史） |
 | B9 | 载荷归档 | `pi-web.tar.gz` **84,849,630 B** / 27,179 文件条目；sha256 见 `pi-web.version` | `stat` + `tar -tzf \| wc -l` |
 | B10 | 端口 | 每次启动从 `listen(0)` 取空闲端口（实测 33727/35711/36743/36885） | `pi-web.ready.json` |
@@ -283,4 +313,5 @@ hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps piNodeM
 | 2026-10-16 | 基线首轮（HAD-W24） | 建立 B1–B12 | `docs/000-工程规划.md` §10 附录 |
 | 2026-10-17 / 10-19 | 权限面收窄、压缩开关、零 ACL 评估 | 见 `docs/001-能力复刻评估.md` REV-5/6/7 + `docs/ACL-无ACL评估.md` | 同上 |
 | **2026-10-20** | **全模块一轮**：L0 门禁 + 108 PC 双形态单测（38×2）+ 204 单测（25）+ 204 远端双仓端到端 + 真实模型调用（compat）+ 真机 compat/jit 验收 | 见 [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) | `logs/20261020-1/` |
+| **2026-10-20 第 2 轮** | **全部用例改在真机执行**：新增设备侧执行通道（`piTestScript`/`piTestSuite`/`piTestEnvFile` + `hdc rport`）；108 双形态 14/14×2、photon 22+2×2、204 单元 26/0×2、204 端到端 22/5（远端受设备网络限制）、真实模型调用 2/2×2 | 见 [`../logs/20261020-2/TEST_REPORT.md`](../logs/20261020-2/TEST_REPORT.md) | `logs/20261020-2/` |
 | **2026-10-20（修复轮复验）** | 缺陷 D1–D3 修复后重装 `29ab4aca52e4` 载荷的 HAP：compat 就绪 **911 ms**、`/` `/api/web-auth` `/api/sessions` 均 **200**，设备侧扩展文件已含修复；jit 就绪 **871 ms**、`兼容层 active=false`、`WebAssembly=object` | [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) §康复验 | 同上 |

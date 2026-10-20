@@ -37,14 +37,22 @@
 | TC-A03 v24 加载 | ✅ | jiti 2.7.0 加载 ⇒ `TOOLS=22`（21 `git_*` + `git_credentials`） | 与共享 `TC-L01` 同口径 |
 | TC-A04 仓库操作 | ✅ | 本地链 16 步通过（init/config/add/commit/log/status/diff/branch/checkout/tag/stash/add/commit） | 见共享 `TC-L02/TC-L03` |
 | TC-A05 入 tar | ✅ | 归档内 `extensions/harmony-git/**` 与 `vendor/**` 齐备 | `assemble-payload --apply` 通过 |
-| TC-A06 HAP 编译 | ✅ | `BUILD SUCCESSFUL`（HAP 131,159,826 B） | — |
-| 共享 `TC-H01…H09` | ✅ 25 通过 / 1 跳过 | `node --test payload/extensions/harmony-git/tests/*.test.mjs` | 跳过项：`TC-H04` 根外软链（本机 `EPERM` 无法建软链） |
-| 共享 `TC-L01…L08` | ✅ | 22 工具注册 + 本地链 16 步 | `TC-L05/L06/L07` 的错误文案已恢复可读（见下方缺陷 D2/D3 修复） |
-| 共享 `TC-D02`（无账号公开仓库，PC 侧） | ✅ | clone(depth=1) / status / log 全成功；`log` 首行为真实提交 | 远端 `<host>` 为需求方提供的公开仓库 |
-| 共享 `TC-D04`（带账号仓库，PC 侧） | ✅ | 缺凭据 ⇒ 结构化报错（点名主机与凭据键）；设凭据 ⇒ clone/status/log/branch/add/commit/**push** 全成功 | 推送使用**唯一命名测试分支**，未触碰主分支 |
-| 共享 `TC-D03` 凭据 | ✅ | `git_credentials list` 只回显协议/host/用户名，密码恒 `********` | 凭据文件落临时 `PI_CODING_AGENT_DIR`，测试后删除 |
-| TC-AD01 物化 | ✅（部分） | 设备 `<filesDir>/pi-agent/extensions/harmony-git/` 存在，含 `lib/tools` 23 文件 | 「21+1 工具可列」需会话（模型驱动），未取证 |
+| TC-A06 HAP 编译 | ✅ | `BUILD SUCCESSFUL`（HAP **131,167,056 B**，含调试通道代码、不含语例脚本） | — |
+| 共享 `TC-H01…H09` | ✅ **设备侧 26 通过 / 0 失败** | 设备上的 `devtest/run.mjs --suite 204-unit`（跑的是物化后的 `pi-agent/extensions/harmony-git/tests/`，两种形态各一遍） | 口径：`node:test` 事件区分不出 skip，故只报总数；PC 侧同一批语例＝25 过 + 1 跳过＝26 |
+| 共享 `TC-L01…L08` | ✅ **设备侧本地链 17 步全通** | 设备上 `devtest` 的 `204-e2e` 套件：init/config/add/commit/log/status/diff/branch/checkout/tag/stash/围栏拒绝 | 围栏越界路径**按设计被结构化拒绝**（`expectError` 计为通过） |
+| 共享 `TC-D02`（无账号公开仓库） | ⚠️ **PC 侧通过；设备侧受网络限制** | PC：clone(depth=1)/status/log 全成功。设备：`Request timed out` —— 设备网络到 `github.com` 20 s 超时，而 `codeload.github.com` 200（探针实测） | 结论是**环境**而非代码；设备接入可路由该主机的网络后重跑同一套件即可 |
+| 共享 `TC-D04`（带账号仓库） | ⚠️ **PC 侧通过；设备侧受网络限制** | PC：缺凭据结构化报错 → 设凭据后全链成功（含 push）。设备：`getaddrinfo ENOTFOUND <host>`（设备 DNS 不解析该内网域名，同主机 IP 也不可达） | 结论是**网络拓扑**；本轮**未**在设备上 push，故未新增远端测试分支 |
+| 共享 `TC-D03` 凭据 | ✅ **设备侧通过** | 设备上 `credentials set` / `list`：只回显协议/host/用户名，口令恒 `********` | 测试后已删除设备上的凭据文件（`<filesDir>/pi-agent/.git-credentials`） |
+| TC-AD01 物化 | ✅ | 设备 `<filesDir>/pi-agent/extensions/harmony-git/` 存在，含 `lib/tools` 23 文件与 `tests/` 5 个语例 | 工具清单本身需会话（模型驱动），见 TC-AD02…AD04 |
 | TC-AD02…AD04 | ⬜ | — | 需模型驱动会话；PC 侧已用同代码覆盖等价路径 |
+
+## 3.1 证据来源（2026-10-20 第 2 轮起）
+
+2026-10-20 第 2 轮起，本模块的**普通与端到端用例一律在真机上执行**（设备上的 Node 进程，
+两形态各一遍）；PC 侧只用于调执行器本身。通道、命令与原始输出见
+[`../overall-test-cases.md`](../overall-test-cases.md) §3 与 [`../../logs/20261020-2/TEST_REPORT.md`](../../logs/20261020-2/TEST_REPORT.md)。
+远端仓库用例的设备侧结论受**设备网络拓扑**限制（探针实测：`github.com` 超时、内网域名 DNS 不存在），
+不记为代码缺陷。
 
 ## 4. 本轮发现并修复的缺陷
 
