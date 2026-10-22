@@ -15,10 +15,10 @@ signing.*.local.json
 *.cer
 
 # ── 运行时二进制 ──
-# libnode.so（约 121 MB）+ libc++_shared.so 由 scripts/provision-runtime.sh 投放（不入库）
+# 历史口径：libnode.so/libc++_shared.so 曾由 scripts/provision-runtime.sh 手工投放；
+# 现运行时由 ohpm 包 @fellow99/node-runtime 随 HAP 合并，本目录不再使用（保留 ignore 以防本地残留）
 entry/libs/
-# ── 本地依赖（构建产物，不入库）──
-# @fellow99/node-bridge 的 HAR 由 scripts/build-bridge-har.sh 生成
+# 历史口径：@fellow99/node-bridge 的本地 HAR（file: 旁路）已退役，现走 ohpm 中心仓
 libs/**/*.har
 *.hap
 

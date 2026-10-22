@@ -74,14 +74,18 @@ const DEFAULT_TAR = path.join(RESFILE_PAYLOAD_DIR, 'pi-web.tar.gz');
 const DEFAULT_VERSION = path.join(RESFILE_PAYLOAD_DIR, 'pi-web.version');
 
 /**
- * 库自带 Node 侧载荷目录（`../ohos-node-bridge/payload/`）。
+ * 库自带 Node 侧载荷目录（vendored：`vendor/node-bridge-payload/`）。
  *
  * ⚠️ F4：`payload/` 三件**不在 HAR 里**（已知打包缺口：HAR 只带 ArkTS/原生代码）—— 应用必须自己投放。
  * 路线 ② 的投放点是 **`resfile/pi-web/`**：`bootstrap.js` 是交给库的 `scriptPath`（`node::Start`
  * 实际执行的脚本），必须能被 Node 的 `fs` 直接打开 —— rawfile 做不到（那不是磁盘目录）。
  * 归档内部也带一份（`pi-web/` 层），因为 `pi-web-launch.js` 只在 `__dirname` / payloadRoot 下找 `host.js`。
+ *
+ * 历史：这三件原先取自旁路的 `../ohos-node-bridge/payload/`；库上架 ohpm 中心仓后
+ * （`@fellow99/node-bridge@0.1.0`），payload/ 仍不随 HAR 分发 ⇒ vendored 进本工程
+ * （`vendor/node-bridge-payload/`，来源与同步说明见其 README）。
  */
-const DEFAULT_BRIDGE = path.resolve(PROJECT_ROOT, '..', 'ohos-node-bridge');
+const DEFAULT_BRIDGE = path.join(PROJECT_ROOT, 'vendor', 'node-bridge-payload');
 /** 必须随包投放的三件（保留相对路径：bootstrap 以同级 `host.js` 与 `./lib/tar-extract.js` 为依赖） */
 const BRIDGE_PAYLOAD_FILES = ['bootstrap.js', 'host.js', 'lib/tar-extract.js'];
 /** 入口脚本名（与 payload/ 下的文件名一致；库侧 entry 会指向它） */
@@ -166,7 +170,7 @@ function usage() {
     '  --apply           真正写盘（默认只做 dry run 并打印计划）',
     '  --force           目标已存在且非空时也继续（会先清空目标）',
     '  --keep-staging    路线 ②：保留暂存目录（默认打完包就删）',
-    '  --bridge <dir>    库目录（默认 ../ohos-node-bridge）；取其 payload/ 三件随包投放（resfile + 归档内各一份）',
+    '  --bridge <dir>    库载荷三件目录（默认 vendor/node-bridge-payload/）；随包投放（resfile + 归档内各一份）',
     '  --pi-web <dir>    被 patch 的上游工作树（默认 ../pi-web；其 HEAD 必须正好是 --patch-tag 那个 tag）',
     '  --patch-dir <dir> 上游补丁目录（默认 patches/v0.12.1/，按被 patch 的上游 tag 命名）',
     '  --pi-web-node <p> 重新编译 pi-web 用的 node（默认当前 node；必须与装 node_modules 的那个一致）',
@@ -1144,7 +1148,7 @@ async function main() {
   if (bridge.missing.length > 0) {
     console.error('✗ 库载荷缺失（HAR 不含 payload/，必须由本脚本投放）：');
     for (const missing of bridge.missing) console.error(`    ${missing}`);
-    console.error('  用 --bridge <ohos-node-bridge 目录> 指定库路径（默认 ../ohos-node-bridge）。');
+    console.error('  用 --bridge <目录> 指定库载荷三件目录（默认 vendor/node-bridge-payload/）。');
     return 2;
   }
 

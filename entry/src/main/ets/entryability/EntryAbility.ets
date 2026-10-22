@@ -33,7 +33,7 @@ export default class EntryAbility extends UIAbility {
      * 108-jitless：运行形态在**编译期**定死（`common/BuildConfig.ets` 的 `NODE_MODE`，默认 compat）。
      *
      * 运行期不做切换的理由：`--jitless` 是进程级形态，而进程内 Node 每进程只能起一次、失败即终态
-     * （`ohos-node-bridge` 契约 §2.6）—— 一次误判就是整机不可用；"权限位授予"也不足以预检
+     * （`@fellow99/node-bridge` 运行时契约 §2.6）—— 一次误判就是整机不可用；"权限位授予"也不足以预检
      * （手机 `JUY-AL80` 实测 granted 仍 SIGTRAP，见 `docs/ACL-无ACL评估.md` §10）。
      */
     const debugBuild: boolean = this.context.applicationInfo.debug;

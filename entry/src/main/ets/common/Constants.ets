@@ -53,7 +53,8 @@ export const ARCHIVE_VERSION_REL: string = 'pi-web/pi-web.version';
 
 // ── 库自带 Node 侧载荷（F4：HAR 不含 payload/，必须由本应用投放）──────────────────
 /**
- * 库引导器（`../ohos-node-bridge/payload/bootstrap.js`）。它是交给库 `scriptPath` 的
+ * 库引导器（vendored：`vendor/node-bridge-payload/bootstrap.js`，源自
+ * [ohos-node-bridge/payload](https://github.com/fellow99/ohos-node-bridge/tree/main/payload)）。它是交给库 `scriptPath` 的
  * **实际执行脚本**：解归档 / 幂等 marker / `uncaughtException` 兜底 / 独立日志通道都在它里面。
  * 投放位置：`resfile/<READONLY_PAYLOAD_DIR>/`（与归档同层，`fs` 可读 —— `scriptPath` 必须是
  * 真实文件路径）。

@@ -2,14 +2,14 @@
   "modelVersion": "6.1.1",
   "description": "Pi Desktop Ark（HarmonyOS）—— 进程内 Node + pi-web 服务 + ArkWeb 渲染",
   "dependencies": {
-    // 消费方接线（工程规划 §7.5 / 附录 G.8）：
-    //   HAR 只带 ArkTS + NAPI 引导件，**不带** libnode.so（121 MB）；
-    //   运行时由 scripts/provision-runtime.sh 调 ohos-node-bridge/tools/provision.mjs 投放。
-    //
-    // 依赖的是**构建好的 HAR**（不是源目录）：本工程开着 useNormalizedOHMUrl，
-    // 该模式下跨工程以相对路径导入源码会被 hvigor 拒（00309001）。
-    // 先用 scripts/build-bridge-har.sh 生成它；发布到 ohpm 后换成版本号（如 "0.1.0"）。
-    "@fellow99/node-bridge": "file:./libs/@fellow99/node-bridge.har"
+    // 消费方接线（ohpm 中心仓，常规依赖）：
+    //   主包 `@fellow99/node-bridge` 只带 ArkTS API + NAPI 引导件（libnode_bridge.so），**不带** libnode.so；
+    //   运行时 `@fellow99/node-runtime`（版本 = Node 版本）带 libs/arm64-v8a/libnode.so + libc++_shared.so，
+    //   由 hvigor 随 HAP 合并。两包来源：https://ohpm.openharmony.cn/（库仓库：github.com/fellow99/ohos-node-bridge）。
+    //   ⚠️ 两种获取方式择一：要么 ohpm 包，要么手工投放 .so —— 不要同时放同名 .so。
+    //   历史：`file:./libs/@fellow99/node-bridge.har` 本地旁路已退役（库 2026-10-22 上架中心仓）。
+    "@fellow99/node-bridge": "0.1.0",
+    "@fellow99/node-runtime": "24.2.0"
   },
   "devDependencies": {}
 }
