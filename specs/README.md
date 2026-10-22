@@ -5,12 +5,12 @@
 **需求：** **000-scaffold 工程搭建** · **规范文档存放目录：** `specs/`
 **版本：** `v0.1`（规划 2026-10-16；Phase 0 骨架 + 关键实证已完成，Phase 1 进行中）
 **目标设备：** `2in1` / `tablet`（真机 HAD-W24 · 7.0.0.107(SP7C00E100R13P5) · OpenHarmony-7.0.0.105 · API 26 · arm64-v8a）；**不做 phone、不做 x86_64**
-**技术栈：** ArkTS 宿主（UIAbility + **ArkWeb**）+ `@fellow99/node-bridge`（进程内 `dlopen` + `node::Start`，Node v24.2.0，见[库文档](../../ohos-node-bridge/docs/000-工程规划.md)）+ 端上 `pi-web` 服务端（同源 HTTP + SSE）+ 同名工具扩展（纯 JS）；**不带任何 Chromium/Electron**
+**技术栈：** ArkTS 宿主（UIAbility + **ArkWeb**）+ `@fellow99/node-bridge`（进程内 `dlopen` + `node::Start`，Node v24.2.0，见[库文档](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md)）+ 端上 `pi-web` 服务端（同源 HTTP + SSE）+ 同名工具扩展（纯 JS）；**不带任何 Chromium/Electron**
 **文档生成时间：** 2026-10-16 · **最后更新：** 2026-10-16
 
 > **权威规划文档是 [`../docs/000-工程规划.md`](../docs/000-工程规划.md)（v0.1）。**
 > 本目录是它的**收敛/展开版**：只做细化与验收，**不复制粘贴**，所有结论回引规划的 § 号，避免两份文档漂移。
-> **运行时的一切结论以库文档为准** —— [`../../ohos-node-bridge/docs/000-工程规划.md`](../../ohos-node-bridge/docs/000-工程规划.md) **§6 对接契约** 与冻结契约 [`../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)。
+> **运行时的一切结论以库文档为准** —— [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md) **§6 对接契约** 与冻结契约 [`ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)。
 
 ---
 
@@ -190,9 +190,9 @@
 
 ```bash
 # ① 构建库 HAR（消费构建产物，不用源码目录 —— 踩坑 00309001）
-./scripts/build-bridge-har.sh                                   # → libs/@fellow99/node-bridge.har
+ohpm install                                                    # → @fellow99/node-bridge + @fellow99/node-runtime
 # ② 运行时投放门禁（幂等 + 七项 ELF 门禁 + SHA-256）
-./scripts/provision-runtime.sh --check                          # 只校验，不改文件
+ohpm info @fellow99/node-runtime                                # 核对运行时包版本（24.2.0）
 # ③ 构建 HAP
 export DEVECO_SDK_HOME='D:\oh-workspace\command-line-tools\sdk'
 export PATH="/d/oh-workspace/DevEco Studio/tools/node:$PATH"

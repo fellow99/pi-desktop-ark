@@ -3,7 +3,7 @@
 > 一句话：把旧壳（Electron）替我们做掉的那一层**宿主能力**在应用宿主侧重新实现 —— 权限预检、目录选择、外链、通知、
 > 系统日志、运行时事实、工作区主目录清单、窗口状态记忆；**能力名使用库冻结的 v1 清单**，实现 100% 在本模块（库只做注册表 + 传输）。
 > 依据：规划 [`../../docs/000-工程规划.md`](../../docs/000-工程规划.md) **§5 第 8/9/10/11/15 条**、**§8.2 ③**、**§12 O8**、**§7.4**（`PI_HOS_ROOTS`）；
-> 冻结命名与错误形状：[`../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md) **§2.7**；
+> 冻结命名与错误形状：[`ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/logs/20261016-1/IMPLEMENTATION_CONTRACT.md) **§2.7**；
 > 能力清单与参数上限：库规划 **§5.4**；分层与围栏：`ARCHITECTURE.md` §4 第 8/9/10/11 行、§5。
 > 宪法：[`../constitution.md`](../constitution.md)（A1/A2/A5/A6/A7/A10 · T1/T5/T6/T9 · 红线 G1/G2）。
 > **现状口径**：⬜ **本模块 0 行实现**（Phase 0 只有启动/渲染骨架；库侧 `HostBridge` 注册表为空，本工程没有任何能力处理器，
@@ -34,7 +34,7 @@
 | `notify.show` | 发一条系统通知（长任务完成 / 失败；v1 按需） |
 | `log.hilog` | 把关键信息写进**系统日志**（与宿主日志双通道） |
 
-> 命名来源：库冻结契约 §2.7 与 `ohos-node-bridge/library/src/main/ets/bridge/HostBridge.ets:25-34` 的 `CAPABILITIES`
+> 命名来源：库冻结契约 §2.7 与库仓库 [HostBridge.ets](https://github.com/fellow99/ohos-node-bridge/blob/main/library/src/main/ets/bridge/HostBridge.ets) `:25-34` 的 `CAPABILITIES`
 > 常量（与本表逐字一致 ✅）。**本模块不得新增、改名、缩写任何一条**（见 `FR-104-002`）。
 
 ### 1.2 解决的问题

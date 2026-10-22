@@ -2,8 +2,8 @@
 
 > 模块：`103`（规划 §14.2）· 交付物：[`spec.md`](spec.md) + 本文件 · 现状：**Phase 0 骨架已落地**（状态条 + 应用内加载页 + 就绪切换），Phase 1 收口未开始
 > 依据：规划 [`../../docs/000-工程规划.md`](../../docs/000-工程规划.md) **§1.1 / §2.4 / §4 / §5 第 1·11·12·14·15 条 / §6.2 / §8.2 ①② / §11 Phase 1 / §12 R3·R4·A5 / §13 G1·G2**；
-> 运行时契约 [`../../../ohos-node-bridge/docs/000-工程规划.md`](../../../ohos-node-bridge/docs/000-工程规划.md) **§5.10 第 6·7·8·9·12 条**；
-> 冻结接口契约 [`../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)（§1.3 日志行 / §1.4 崩溃记录 / §2.5 结构）；
+> 运行时契约 [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md) **§5.10 第 6·7·8·9·12 条**；
+> 冻结接口契约 [`ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)（§1.3 日志行 / §1.4 崩溃记录 / §2.5 结构）；
 > 宪法 [`../constitution.md`](../constitution.md)（A1/A5/A6/A7 + T1/T6/T9）；旧壳对照 [`../../../pi-desktop-hos/src-main/main.js`](../../../pi-desktop-hos/src-main/main.js)（`:1111-1151` 外链与围栏、`:68-107` 旧 loading 页）。
 > 标注：**✅ 已落地**（带 `path:line`）/ **⬜ 规划未实现（Phase N）** / ⚠️ **冲突·风险**。
 

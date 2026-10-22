@@ -2,7 +2,7 @@
 
 > 工程：`pi-desktop-ark` · 应用名：**Pi Desktop Ark** · 包名：`org.fellow99.pi.PiDesktopArk` · 需求：**000-scaffold 工程搭建**
 > 规范文档存放目录：`specs/` · 生成日期：**2026-10-16**
-> 权威规划文档：[`../docs/000-工程规划.md`](../docs/000-工程规划.md)（v0.1，**结论以它为准**）；运行时契约见库文档 [`../../ohos-node-bridge/docs/000-工程规划.md`](../../ohos-node-bridge/docs/000-工程规划.md) **§6**
+> 权威规划文档：[`../docs/000-工程规划.md`](../docs/000-工程规划.md)（v0.1，**结论以它为准**）；运行时契约见库文档 [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md) **§6**
 >
 > 状态口径：✅ 已完成 · ⚠️ 已完成但含未闭合项（见备注）· ⬜ 待生成
 
@@ -46,7 +46,7 @@
 
 1. **先整体、后模块**：项目级文档（P-01…P-08）先建立术语、责任分界、模块编号（规划 §14.2）与证据口径，模块文档再细化 —— 避免前后引用不存在的文件。
 2. **最后生成索引**：`README.md` 与 `SPECS_CHECKLIST.md` 在全部文档完成后按**实际目录内容**扫描生成（`ls` + `wc -l`），不预测结构、不写未生成的文件名。
-3. **不复制粘贴**：所有结论回引 [`../docs/000-工程规划.md`](../docs/000-工程规划.md) 的 § 号、库文档 § 号或冻结契约（[`../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)）；新增平台结论必须先落规划文档，再回到 `specs/` 引用（宪法 A3）。
+3. **不复制粘贴**：所有结论回引 [`../docs/000-工程规划.md`](../docs/000-工程规划.md) 的 § 号、库文档 § 号或冻结契约（[`ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)）；新增平台结论必须先落规划文档，再回到 `specs/` 引用（宪法 A3）。
 4. **证据标记**：每条非显然结论带 ✅ 实测 / 🔶 沿用 / ⬜ 待验证 / ⚠️ 冲突·风险 之一（口径见 [`constitution.md`](./constitution.md) §三）。
 
 ---

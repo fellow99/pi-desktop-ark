@@ -7,8 +7,8 @@
 > 需求关键字按 **RFC 2119**：**必须**（MUST）· **必须不**（MUST NOT）· **应**（SHOULD）· **可以**（MAY）。
 > 依据：[`constitution.md`](../constitution.md)（主约束：**A2 壳薄 / A4 不改上游 / A6 不隐藏平台真相 / A9 异常兜底**）·
 > 规划 [`../../docs/000-工程规划.md`](../../docs/000-工程规划.md) **§2.3 / §7 全部 / §8.3 / §8.4 / §11 Phase 1 第 1·2 条 / §12 的 R5·R6·A1·A2 / 附录 C** ·
-> 运行时契约 [`../../../ohos-node-bridge/docs/000-工程规划.md`](../../../ohos-node-bridge/docs/000-工程规划.md) **§5.5 载荷分发与自解包 / §5.6 环境契约** ·
-> 冻结接口契约 [`../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md) **§3（Node 侧载荷 API）/ §5 禁止事项**。
+> 运行时契约 [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md) **§5.5 载荷分发与自解包 / §5.6 环境契约** ·
+> 冻结接口契约 [`ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/logs/20261016-1/IMPLEMENTATION_CONTRACT.md) **§3（Node 侧载荷 API）/ §5 禁止事项**。
 > 证据标记：✅ **实测** / 🔶 **沿用** / ⬜ **待验证** / ⚠️ **冲突·风险**。项目级需求见 [`../overall-spec.md`](../overall-spec.md)。
 
 ---

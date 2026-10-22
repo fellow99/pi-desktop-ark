@@ -1,7 +1,7 @@
 # TECH.md —— `pi-desktop-ark` 技术选型
 
 > 口径：**✅ 已落地** 与 **⬜ 规划未实现（Phase N）** 分开标注；每条给出「选型理由」，且理由**引用规划 §号或库文档 §号**，不重复论证运行时结论（宪法 A3）。
-> 依据：规划 [`../docs/000-工程规划.md`](../docs/000-工程规划.md) §1.2/§2.3/§2.4/§7/§8/§14.3；库文档 `../../ohos-node-bridge/docs/000-工程规划.md` §6/§D.8/§D.10/附录 G。
+> 依据：规划 [`../docs/000-工程规划.md`](../docs/000-工程规划.md) §1.2/§2.3/§2.4/§7/§8/§14.3；库文档 [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md)（上游库仓库）§6/§D.8/§D.10/附录 G。
 
 ---
 
@@ -18,8 +18,8 @@
 | 本地偏好 | ⬜ **`preferences`** | 窗口尺寸/最近状态（最小版） | 规划 §5 第 7 条指定「先做记忆尺寸最小版」；用平台 KV 而不是自建 JSON，避免沙箱文件格式漂移 |
 | 网络探活 | **`@kit.NetworkKit` `http`** | 就绪探活（当前 20 次 × 500 ms） | 与渲染解耦：探活失败**不依赖 Web 组件**报错（旧壳靠 HTTP 轮询 `/api/web-auth`，`src-main/main.js:858-873`）；平台自带，无额外依赖 |
 | 日志（宿主） | **`@kit.PerformanceAnalysisKit` `hilog`**（DOMAIN `0xD0033`，TAG `PI_DESKTOP_ARK`） | 宿主侧阶段与错误 | 与库同 DOMAIN（`NODE_BRIDGE` TAG）便于一条 `hilog` 命令抓全链；✅ `common/Constants.ets:3-4,29-37` |
-| 运行时 | **`@fellow99/node-bridge`（HAR）**，`file:./libs/@fellow99/node-bridge.har` | 进程内 Node（`dlopen` + `node::Start`，detached 线程） | 唯一可行形态：应用域子进程 JIT 被拦（seccomp/SIGSYS）、`execve` 全 EACCES ⇒ 不做子进程（规划 §0.3、§8.4；库 §4.6 路线 A）。**以构建好的 `.har` 消费**而不是源码目录：`useNormalizedOHMUrl: true` 下跨工程相对导入被拒（`00309001`，✅ 本机踩坑） |
-| 运行时产物 | **Node v24.2.0**（`libnode-arm64.so` → 部署名 `libnode.so`，126,809,264 B）+ `libc++_shared.so`（1,262,504 B，取自 ohos-sdk） | 真 Node 运行时 | 满足上游 `engines.node >= 22.19.0`（✅ `pi/package.json:70-71`、`pi-web/package.json`）；共享库形态（非 PIE）才能 `dlopen`（库附录 D）；版本与 SHA-256 锁在 `ohos-node-bridge/runtime.lock.json`（库附录 G）；二进制**不入库** |
+| 运行时 | **`@fellow99/node-bridge@0.1.0`（ohpm 中心仓）** | 进程内 Node（`dlopen` + `node::Start`，detached 线程） | 唯一可行形态：应用域子进程 JIT 被拦（seccomp/SIGSYS）、`execve` 全 EACCES ⇒ 不做子进程（规划 §0.3、§8.4；库 §4.6 路线 A）。**以 ohpm 包（HAR）消费**而不是源码目录：`useNormalizedOHMUrl: true` 下跨工程相对导入被拒（`00309001`，✅ 本机踩坑）；库已上架中心仓 ⇒ 直接 `ohpm install`（历史 `file:./libs/…har` 旁路已退役） |
+| 运行时产物 | **Node v24.2.0**（`libnode-arm64.so` → 部署名 `libnode.so`，126,809,264 B）+ `libc++_shared.so`（1,262,504 B，取自 ohos-sdk） | 真 Node 运行时 | 满足上游 `engines.node >= 22.19.0`（✅ `pi/package.json:70-71`、`pi-web/package.json`）；共享库形态（非 PIE）才能 `dlopen`（库附录 D）；运行时二进制由独立包 **`@fellow99/node-runtime@24.2.0`**（ohpm 中心仓）分发，版本与 SHA-256 锁在库侧 `runtime.lock.json`（库附录 G）；本工程**不手工投放**、二进制**不入库** |
 | 端上服务端 | **`pi-web`（Next 16.3.8，非 standalone）+ `pi` agent** | SPA `/`、`/api/*`、SSE `/api/agent/*` | 与旧壳**同一份上游 UI** ⇒ 功能对标零改写（规划 §8.1）；**非 standalone** 是上游事实（✅ `pi-web/package.json`）⇒ 载荷必须带**完整** `node_modules` |
 | 模块格式 | **CJS + ESM 混用**（`pi-dist/package.json` 无 `type`；`.next/package.json` = commonjs；`@earendil-works/*` = module） | 载荷加载器 | 上游事实（规划 §2.3）⇒ 需要「`require()` 失败退 `import()`」的加载器（旧壳已有，直接复用） |
 | SWC | **WASM 版**：`node_modules/next/wasm/@next/swc-wasm-nodejs/`（`wasm_bg.wasm` ≈30.4 MB，🔶 旧壳实测） | 编译 `next.config.ts` | 设备无 aarch64-ohos 原生 SWC（✅ 规划 §2.3）⇒ **WebAssembly 是硬需求** ⇒ 与 JIT/ACL 强耦合（库 §4.7） |
@@ -30,7 +30,7 @@
 | 签名 | **DevEco 生成的调试证书/Profile（与 `bundleName` 绑定）** + 含 ACL 的 Profile（现役 1 项：`kernel.ALLOW_WRITABLE_CODE_MEMORY`） | 装机与 ACL 生效 | 自签 OpenHarmony 证书被 HarmonyOS 真机拒（`fail to verify pkcs7 file`，库 §D.7）⇒ 只能用 DevEco/AGC 链路；材料**不入库**（宪法 T3） |
 | 目标设备 | **2in1 / tablet，arm64-v8a**；真机 **HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / OpenHarmony-7.0.0.105 / API 26** | 运行目标 | 不做 phone、不做 x86_64（规划 §0.3/§1） |
 | 观测/取证 | **`hdc`**：`snapshot_display`（截图）、`uitest uiInput`（点按）、`rport`（日志回传）、`hilog`、`fport` + `curl /facts` `/log` | 真机判据 | 旧壳与本工程共同结论：`uitest dumpLayout` 在本机拿不到结果 ⇒ 判据改走 HTTP 端点（✅ 库 §D.8；规划 附录 A） |
-| host 侧脚本 | **Bash（Git-Bash）+ Node** | 构建/投放/取证 | 与库的 `tools/provision.mjs`（Node）统一；`hvigorw.bat` 经 `cmd //c` 调用 |
+| host 侧脚本 | **Bash（Git-Bash）+ Node** | 构建/组装/取证 | `hvigorw.bat` 经 `cmd //c` 调用；运行时获取由 ohpm 中心仓包承担（`ohpm install`），不再有本地投放脚本 |
 
 ---
 
@@ -45,7 +45,7 @@
 | **`git` / worktree 功能** | 设备无 `git` 二进制（🔶 旧壳 #23）；降级为不可用并提示（宪法 A6） |
 | **后台常驻 / 开机自启 / 自动更新** | 平台级不可用（2in1 最小化不算后台、无公开 setter，🔶 旧壳 #29/#31）；规划 §0.3 已列为非目标 |
 | **应用内解压（ArkTS/OHOS 侧解压器写业务文件）** | 「谁写谁读」硬约束：ArkTS 写出的文件 Node **读不到**（`MODULE_NOT_FOUND`）⇒ 解包只能由 Node 自己做（库宪法 C3） |
-| **跨工程源码导入（`../ohos-node-bridge/library`）** | `useNormalizedOHMUrl: true` 下报 `00309001 Cannot import files from an external module using relative paths`（✅ 本机踩坑，规划 附录 B #1） |
+| **跨工程源码导入（`ohos-node-bridge/library`）** | `useNormalizedOHMUrl: true` 下报 `00309001 Cannot import files from an external module using relative paths`（✅ 本机踩坑，规划 附录 B #1）。现役方案 = ohpm 包（HAR 已编译产物，不受此限） |
 | **二进制入库**（`libnode.so` 120.9 MiB） | GitHub 单文件 100 MiB 硬限；且每次换版本都留永久历史（库附录 G.1/G.5） |
 | **制品库（Nexus/OSS/私有 registry）** | 没有现成制品库；为一枚可校验的 `.so` 引入一套服务，运维成本 > 收益（库附录 G.5） |
 | **把 `resfile` 当可写目录** | `resfile` 是安装目录（只读）；需要可写就把**缓存目录**指向沙箱，而不是把整份载荷再解一份（规划 §7.1） |
@@ -60,12 +60,12 @@
 | 应用 | `Pi Desktop Ark` / `org.fellow99.pi.PiDesktopArk` / versionName `0.1.0` / versionCode `100` | ✅ `AppScope/app.json5` |
 | 模块 API 口径 | `compatibleSdkVersion 5.0.5(17)`、`targetSdkVersion 6.1.1(24)`；`app.json5` 的 `minAPIVersion 17` / `targetAPIVersion 24` | ✅ `build-profile.json5`、`AppScope/app.json5`（⚠️ 与规划「API 26」口径的差异见 `STRUCTURE.md` §2.1） |
 | Node | **v24.2.0**（`platform=openharmony`、`arch=arm64`、`modules=137`、`v8 13.6.233.10-node.17`、`uv 1.51.0`、`undici 7.10.0`、`openssl 3.0.16`） | ✅ 本机 `/facts`（`docs/evidence/2026-10-16-acl-jit-verified.md`） |
-| 运行时产物锁 | `ohos-node-bridge/runtime.lock.json`：`libnode.so` SHA-256 `3019bf5f…51a1`、`libc++_shared.so` SHA-256 `388e0df2…b2f9` | ✅ 库 §D.9 + 本工程 HAP 内核对（规划 附录 B #2） |
+| 运行时产物锁 | `@fellow99/node-runtime@24.2.0`（ohpm 包）内 `libnode.so` SHA-256 `3019bf5f…51a1`、`libc++_shared.so` SHA-256 `388e0df2…b2f9`（锁值见库侧 `runtime.lock.json`，随主包 rawfile 分发） | ✅ 库 §D.9 + 干净目录 `ohpm install` 实测 + 本工程 HAP 内核对（规划 附录 B #2） |
 | 上游 | `pi`（`engines.node >= 22.19.0`）、`pi-web`（`next 16.3.8`、`react ^19.2.4`、`engines.node >= 22.19.0`） | ✅ `pi/package.json:70-71`、`pi-web/package.json:61` |
 | 构建产物 | `entry-default-signed.hap` **129,347,874 B**（未签名 128,255,687 B） | ✅ 本机 `entry/build/default/outputs/default/` + `docs/evidence/…` |
 | 设备 | HAD-W24（HUAWEI MateBook Pro）/ 7.0.0.107(SP7C00E100R13P5) / OpenHarmony-7.0.0.105 / API 26 / arm64-v8a；序列号 `3QC0226526001227` | ✅ 本机真机记录 |
 | 工具链路径 | `DEVECO_SDK_HOME=D:\oh-workspace\command-line-tools\sdk`、`hvigorw.bat`、`hdc.exe`（DevEco sdk 的 `toolchains/`） | ✅ 规划 §14.3/附录 A |
-| 库 | `@fellow99/node-bridge` version `0.1.0`（本地 HAR，441,353 B） | ✅ `oh-package-lock.json5` |
+| 库 | `@fellow99/node-bridge` version `0.1.0` ＋ `@fellow99/node-runtime` version `24.2.0`（均来自 ohpm 中心仓） | ✅ `oh-package-lock.json5` |
 
 ---
 
@@ -92,8 +92,8 @@
 | ArkWeb 主界面 | 必须开 `domStorageAccess`；起来后 `clearHistory()` + 返回键守卫；外链走围栏 | ✅ 前两项；⬜ 后两项（规划 §5 第 1/11 条） |
 | 载荷只读直读（`resfile`） | Node 读安装目录、**不写**安装目录；可写部分（缓存）指到沙箱 | ⬜ Phase 1（`resfile/pi-web/` 现只有 README） |
 | 载荷由 Node 自解包（若走 `tar.gz`） | 解包器必须是 Node 代码（`zlib`+`fs`）+ SHA-256 marker 幂等；**禁用** OHOS 侧解压器写业务文件 | 🔶 解包器在旧壳（`src-main/tar-extract.js`，214 行）可直接搬 |
-| 以 HAR 消费库 | 每次改库代码都要重跑 `scripts/build-bridge-har.sh`；不能直接引用库源码 | ✅ `oh-package.json5` + 脚本 |
-| 运行时产物不入库 | 新机器/CI 必须先 `provision-runtime.sh` 再 `assembleHap`；`--check` 可进 CI | ✅ 脚本已就位 |
+| 以 ohpm 包消费库 | 库与运行时的发版节奏受中心仓约束（要新能力须等库发版）；不能直接引用库源码 | ✅ `oh-package.json5` |
+| 运行时产物不入库 | 新机器/CI 必须先 `ohpm install` 再 `assembleHap`；中心仓不可达时无法构建 | ✅ `oh-package.json5` |
 | 签名与 ACL 绑定包名 | 改包名 ⇒ 全套重来（证书、Profile、ACL 申请） | ✅ 现状包名已固定 |
 | `hilog` 为宿主观测通道 | 阶段文案要进 hilog（可被 `hdc shell hilog` 抓到）；判据不能只靠 UI 文字 | ✅ `common/Constants.ets` 的 `Log` |
 | `uitest dumpLayout` 不可用 | 所有「界面上出现了 X」的判据必须能截图或经 HTTP 端点读回 | ✅ 测试用例纪律（`overall-test-cases.md` §4） |

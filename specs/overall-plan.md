@@ -1,7 +1,7 @@
 # overall-plan.md —— Pi Desktop Ark 整体技术方案
 
 > 本文件写「**怎么做**」：技术上下文、宪法合规检查、分阶段实现策略、跨切面关注点、测试策略、构建装机流水线。
-> 依据：规划 [`../docs/000-工程规划.md`](../docs/000-工程规划.md) **§11 分阶段计划 / §12 风险与开放问题 / §14.2 模块编号 / §14.3 流水线**；运行时契约 `../../ohos-node-bridge/docs/000-工程规划.md` **§6**。
+> 依据：规划 [`../docs/000-工程规划.md`](../docs/000-工程规划.md) **§11 分阶段计划 / §12 风险与开放问题 / §14.2 模块编号 / §14.3 流水线**；运行时契约 [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md)（上游库仓库）**§6**。
 > 现状口径：**Phase 0 已完成，Phase 1 未开始**（`specs/` 八件套是 Phase 1 的第一件交付物）。
 
 ---
@@ -12,13 +12,13 @@
 |---|---|
 | 形态 | ArkTS 宿主（Ability + ArkWeb）+ 库提供的**进程内** Node（`dlopen` + `node::Start`，detached 线程）+ 端上 `pi-web` 服务端 |
 | 数据面 | 同源 HTTP + SSE：`/`（SPA）、`/api/*`、SSE；零 CORS、零头改写、零 IPC 载体 |
-| 运行时 | Node **v24.2.0**（`platform=openharmony`、`modules=137`），产物锁在 `ohos-node-bridge/runtime.lock.json` |
+| 运行时 | Node **v24.2.0**（`platform=openharmony`、`modules=137`），由 ohpm 包 `@fellow99/node-runtime@24.2.0` 分发（锁值见库侧 `runtime.lock.json`） |
 | 上游载荷 | `pi-web`（Next 16.3.8 非 standalone）+ `pi` agent；设备侧 SWC 只能走 WASM |
 | 设备 | HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / API 26 / OpenHarmony-7.0.0.105 / arm64-v8a；`2in1` + `tablet` |
 | 权限 | 声明面 **21** `requestPermissions` + 2 `definePermissions` + `taskKeeping`；**现役 1 项 ACL**（另 3 项撤销；文档/下载保留并改为点击时授权，见 REV-5·6·7） |
 | 已实证结论 | ACL 生效 ⇒ 无 `Cpp Crash`、`wasm.available/validate=true`、热循环 **6–9 ms/2e6**；端口冲突 ⇒ 整进程 abort；`dup2` 日志混流 |
 | 当前产物 | 签名 HAP **129,347,874 B**；载荷（`pi-dist`）**尚未接入**（`resfile/pi-web/` 仅 README） |
-| 构建链 | `scripts/build-bridge-har.sh` → `scripts/provision-runtime.sh` → `hvigorw assembleHap` → `hdc install -r` |
+| 构建链 | `ohpm install`（`@fellow99/node-bridge` + `@fellow99/node-runtime`）→ `hvigorw assembleHap` → `hdc install -r` |
 | 关键未知 | ArkWeb→`127.0.0.1`（P0-3）、`resfile` 直读（P0-13）、裁剪后 Next 能否起（O1/O2）、SSE 长连接行为（A5） |
 
 ---
@@ -155,7 +155,7 @@
 
 | 层 | 目标 | 手段 | 通过判据 |
 |---|---|---|---|
-| L0 host 构建门禁 | 构建链不断 | `provision-runtime.sh --check`（七项 ELF 门禁 + SHA）、`hvigorw assembleHap` 成功、产物存在且大小合理 | 命令退出码 0 + 产物 `stat` 与预算相符 |
+| L0 host 构建门禁 | 构建链不断 | `ohpm install` 成功（两包齐）、`hvigorw assembleHap` 成功、产物存在且大小合理 | 命令退出码 0 + 产物 `stat` 与预算相符 |
 | L1 真机装机 | 授权面就位 | `hdc install -r` | 输出 `install bundle successfully.`（失败样例：`code:9568289 / PermissionName: ohos.permission.READ_PASTEBOARD`） |
 | L2 真机功能 | 用户能力可用 | 四条取证通道（见 §5.1）+ 端到端证书 | 截图序列 / HTTP 端点返回 / 回传日志三者互证 |
 | L3 真机性能 | 档位未回退 | `/facts` 的 `wasm.*`、`hotloop_ms_2e6`；首启计时 | 热循环 6–9 ms/2e6 量级；`wasm.validate=true` |
@@ -192,11 +192,10 @@ hdc fport tcp:15577 tcp:15577 && curl -s http://127.0.0.1:15577/log
 ## 6. 构建与装机流水线
 
 ```bash
-# ① 构建库 HAR（消费方不直接用源码目录 —— 见踩坑 00309001）
-./scripts/build-bridge-har.sh                  # → libs/@fellow99/node-bridge.har
+# ① 装依赖（两包均来自 ohpm 中心仓；消费方不直接用源码目录 —— 见踩坑 00309001）
+ohpm install                                   # → @fellow99/node-bridge + @fellow99/node-runtime（引擎 libnode.so 随运行时包内置）
 
-# ② 投放运行时（≈121 MB；委托库唯一一份实现；幂等 + 七项 ELF 门禁）
-./scripts/provision-runtime.sh                 # 或 --check / --download（国内需 NODE_USE_ENV_PROXY=1）
+# ② 运行时无需本地投放（@fellow99/node-runtime 包内置 libnode.so，hvigor 随 HAP 合并）
 
 # ③ 构建 HAP
 export DEVECO_SDK_HOME='D:\oh-workspace\command-line-tools\sdk'
@@ -213,7 +212,7 @@ hdc shell "aa start -a EntryAbility -b org.fellow99.pi.PiDesktopArk --ps probeFl
 
 | 门禁 | 检查 | 失败含义 |
 |---|---|---|
-| 构建前 | `provision-runtime.sh --check` | 运行时缺失/被篡改（SHA 不符）⇒ HAP 里没有可用的 Node |
+| 构建前 | `ohpm install`（两包齐）+ HAP 内 `libnode.so` SHA 核对 | 运行时缺失 ⇒ HAP 里没有可用的 Node |
 | 构建中 | `assembleHap` 输出 + 产物存在 | 依赖接线/HAR 缺失、ArkTS 编译错误 |
 | 构建后 | 产物 `stat` 与预算对照；HAP 内 `libs/` 清单（`compress_type` 必须是 8） | 体积异常、原生库未压缩（上架材料要写清） |
 | 装机 | `install bundle successfully.` | Profile 授权面缺失（宪法 A10） |

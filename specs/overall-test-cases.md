@@ -2,7 +2,7 @@
 
 > 本文件是**索引与执行台账**：分层规则、用例族 ID 分配、真机取证通道、禁止的判据、基线数值、待验证清单、以及**每轮执行结果**。
 > 单步细节不写在这里 —— 有独立用例文档的模块以模块文档为准（见 §2.0），其余模块的用例暂由本索引承载。
-> 依据：[`../docs/000-工程规划.md`](../docs/000-工程规划.md) §10.4 判据 / §11 阶段出口 / §12 风险 / 附录 A 命令；库文档 `../../ohos-node-bridge/docs/000-工程规划.md` §5.7 / §D.8 / §D.10。
+> 依据：[`../docs/000-工程规划.md`](../docs/000-工程规划.md) §10.4 判据 / §11 阶段出口 / §12 风险 / 附录 A 命令；库文档 [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md)（上游库仓库）§5.7 / §D.8 / §D.10。
 > 状态值域：`✅ 通过` · `⚠️ 部分通过 / 口径需修订` · `❌ 不通过（→ 修复项）` · `⬜ 未执行`。**未跑过的用例一律 ⬜，不得写「预期通过」**。
 
 ---
@@ -11,7 +11,7 @@
 
 | 层 | 名称 | 运行位置 | 目的 | 通过判据 | 不通过意味着 |
 |---|---|---|---|---|---|
-| **L0** | host 构建门禁 | 开发机（Git-Bash） | 构建链不断、产物可信 | `provision-runtime.sh --check` 退出码 0 + `assemble-payload`/`assembleHap` 成功 + 产物存在且大小在预算内 | 依赖接线断裂 / 运行时被篡改 / 签名材料缺失 |
+| **L0** | host 构建门禁 | 开发机（Git-Bash） | 构建链不断、产物可信 | `ohpm install` 成功（`@fellow99/node-bridge` + `@fellow99/node-runtime`）+ `assemble-payload`/`assembleHap` 成功 + 产物存在且大小在预算内 | 依赖接线断裂 / 中心仓不可达 / 签名材料缺失 |
 | **L1** | 真机装机 | 开发机 + 真机（hdc） | 授权面就位（宪法 A10） | `hdc install -r` → `install bundle successfully.` | Profile 缺权限项（样例见 §5 B8） |
 | **L2** | 真机功能 | 真机 + 取证通道 | 用户能力可用（`overall-spec.md` §3） | 截图序列 / HTTP 端点 / 回传日志**三者互证** | 功能未实现或实现漂移 |
 | **L3** | 真机性能 | 真机（`/facts` 或载荷自报 + 计时） | 档位未回退 | `WebAssembly` 存在性与热循环与基线同量级、就绪耗时在预算内 | ACL 失效 / 载荷变大 / 首启退化 |
@@ -45,7 +45,7 @@
 
 | 用例族 ID | 名称 | 层 | 覆盖模块 | 判据（可证伪） | 命令/证据 | 状态 |
 |---|---|---|---|---|---|---|
-| `TC-ARK-001` | 运行时投放门禁 | L0 | 101 | `provision-runtime.sh --check` 退出码 0；`entry/libs/arm64-v8a/libnode.so` 的 SHA-256 == `runtime.lock.json`（`3019bf5f…51a1`） | `./scripts/provision-runtime.sh --check` | ✅ 通过（2026-10-20 复跑：期望/实测 SHA 一致，七项 ELF 门禁 OK） |
+| `TC-ARK-001` | 运行时获取门禁 | L0 | 101 | `ohpm install` 成功；HAP 内 `libnode.so` 的 SHA-256 == 锁值（`3019bf5f…51a1`，随主包 rawfile `node_bridge/runtime.lock.json`） | `ohpm install` + `assembleHap` + HAP 解包核对 SHA | ✅（历史手工投放轮次 2026-10-20 通过；改 ohpm 包后于本次复测） |
 | `TC-ARK-002` | HAP 构建成功 | L0 | 101/102 | `assembleHap` 退出码 0 且产物存在，体积与 §5 B7 一致 | `hvigorw assembleHap …` | ✅ 通过（`BUILD SUCCESSFUL`；`$HAP` **131,159,826 B**） |
 | `TC-ARK-003` | 装机（授权面就位） | L1 | 107 | 输出含 `install bundle successfully.` | `hdc install -r $HAP` | ✅ 通过 |
 | `TC-ARK-004` | 启动无崩溃 | L1/L2 | 101 | `hilog` 中 `Cpp Crash` **0 命中**；应用与渲染子进程存活 | `hdc shell hilog -x \| grep -c "Cpp Crash"` | ✅ 通过（实测 **0**） |

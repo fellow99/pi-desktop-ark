@@ -6,7 +6,7 @@
 | 项 | 值 |
 |---|---|
 | 权威规划 | [`../docs/000-工程规划.md`](../docs/000-工程规划.md)（v0.1，**本工程结论以它为准**） |
-| 运行时契约 | [`../../ohos-node-bridge/docs/000-工程规划.md`](../../ohos-node-bridge/docs/000-工程规划.md) **§6**（库承诺什么 / 消费方必须自建什么） |
+| 运行时契约 | [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md) **§6**（库承诺什么 / 消费方必须自建什么） |
 | 本工程实测 | [`../docs/ACL配置.md`](../docs/ACL配置.md) · `docs/evidence/2026-10-16-acl-jit-verified.md`（本地留存，不入库） |
 | 版本 / 状态 | v1.0 · 2026-10-16 · **生效** |
 | 适用 | `entry/`（ArkTS 宿主与资源）· `scripts/`（host 侧流水线）· 载荷适配（Node 侧启动脚本）· `resfile/pi-web/` 载荷 · `specs/` |
@@ -159,7 +159,7 @@
 | T4 | **二进制与大载荷不入库**：`entry/libs/`、`libs/**/*.har`、`resfile/pi-web/*`（保留 README） | 根 `.gitignore:17-24` ✅ |
 | T5 | **路径一律绝对**：不依赖 `process.cwd()`（真机 = `/`）、不依赖 `process.execPath`（真机 = `/system/bin/appspawn`） | 库 §D.8 偏差表；`resfile/pi-web/README.md:17-19` |
 | T6 | **端口、路径、阶段文案集中在 `common/Constants.ets`**，页面与编排层不写字面量 | `et/app/PiDesktopRuntime.ets:4`、`et/common/Constants.ets` |
-| T7 | **原生库只经 HAR 消费**：跨工程源码相对导入被 `00309001` 拒（`useNormalizedOHMUrl: true` 下），必须走 `file:./libs/@fellow99/node-bridge.har` | `oh-package.json5:5-12`、`scripts/build-bridge-har.sh:4-11` |
+| T7 | **原生库只经 HAR 消费**：跨工程源码相对导入被 `00309001` 拒（`useNormalizedOHMUrl: true` 下）。现役口径 = ohpm 中心仓版本号依赖（`@fellow99/node-bridge` + `@fellow99/node-runtime`），**不做** `file:` 本地 HAR 旁路 | `oh-package.json5` |
 | T8 | **日志谁写谁读**：载荷写自己的日志文件；宿主读回（`Logger.tail` / `/log` 端点 / 诊断面板）；不把「写成功」当归宿 | `library/src/main/ets/log/Logger.ets:26-52`；规划 §6.3 |
 | T9 | **阶段分级标注**：文档与代码注释中，未实现的规划项必须写 `⬜ 规划未实现（Phase N）`，不得写成既成事实 | 本目录全部文档 |
 
@@ -223,5 +223,5 @@
 1. **改权限声明面 / 包名 / 签名主体** ⇒ 必须重新申请并**重新生成 Profile**，按 `docs/ACL配置.md` §2.3 复验（装机成功 + `/facts`）；
 2. **改载荷形态或裁剪项** ⇒ 必须更新 `overall-data-model.md` §6 的体积表与 `overall-test-cases.md` 的对应用例，并重跑 Phase 1 出口判据；
 3. **改运行时时长/端口/环境契约** ⇒ 先改 `docs/000-工程规划.md`（唯一权威）与库文档 §6.2 共享事实，再改 `specs/`；
-4. **换运行时版本**（`runtime.lock.json` 变更）⇒ 重跑 `scripts/provision-runtime.sh --check` + 真机 `/facts` + 四条取证通道，把结果写进 `docs/evidence/YYYY-MM-DD-*.md`；
+4. **换运行时版本**（`@fellow99/node-runtime` 新版本发布）⇒ `ohpm install @fellow99/node-runtime@<新版本>` 后真机 `/facts` + 四条取证通道，把结果写进 `docs/evidence/YYYY-MM-DD-*.md`；
 5. **新增模块** ⇒ 在规划 §14.2 的编号表（`101`–`107`）里取号，`specs/1NN-<name>/{spec.md,plan.md[,tasks.md,test-cases.md]}`，并回引本文件与规划 §号。

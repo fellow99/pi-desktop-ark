@@ -3,7 +3,7 @@
 > 本文件写「**怎么做**」：技术上下文、宪法逐条合规、决策与替代方案、能力的真实字段与校验规则、接口契约、实现策略、测试与文件清单、Phase 待实现项。
 > 需求侧（要什么 + 验收判据）在 [`spec.md`](spec.md)（`FR-104-*` / `AC-104-*` / `NFR-104-*`）；本文件**只引用不复制**。
 > 依据：规划 [`../../docs/000-工程规划.md`](../../docs/000-工程规划.md) **§5 第 8/9/10/11/15 条**、**§8.2 ③**、**§8.3**（旧壳资产）、**§12 O8**、**§7.4**、**§11 Phase 2**；
-> 库契约 [`../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md) **§2.7 / §5.4**；分层见 [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §4/§8。
+> 库契约 [`ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/logs/20261016-1/IMPLEMENTATION_CONTRACT.md) **§2.7 / §5.4**；分层见 [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §4/§8。
 > **现状口径**：⬜ 本模块**未开始**（`entry/src/main/ets/host/` 不存在；库 `HostBridge` 注册表为空；本工程 0 个处理器）。
 
 ---
@@ -254,8 +254,8 @@ host.invoke('perm.check', {"name":"…"}) ──► dispatch(name, argsJson)
 | `entry/src/main/ets/app/PiDesktopRuntime.ets` | 提供 `runtime.facts` 所需的端口/状态读数（**不改业务语义**） | 154（现状 ✅） |
 | `entry/src/main/ets/entryability/EntryAbility.ets` | 窗口尺寸应用点；`onPrepareToTerminate` 由 `101` 接 | 61（现状 ✅） |
 | `entry/src/main/resources/{base,zh_CN,en_US}/element/string.json` | 新增文案键（三语一致，T2） | 48 / 36 / 36（现状 ✅） |
-| `../../../ohos-node-bridge/library/src/main/ets/bridge/HostBridge.ets` | 消费面（库侧，不改） | 186（外部工程） |
-| `../../../ohos-node-bridge/library/src/main/ets/runtime/Types.ets` | `HostBridgeHandler` 签名（同步 —— 阻塞项来源） | 159（外部工程） |
+| [ohos-node-bridge/library/.../HostBridge.ets](https://github.com/fellow99/ohos-node-bridge/blob/main/library/src/main/ets/bridge/HostBridge.ets) | 消费面（库侧，不改） | 186（外部工程） |
+| [ohos-node-bridge/library/.../Types.ets](https://github.com/fellow99/ohos-node-bridge/blob/main/library/src/main/ets/runtime/Types.ets) | `HostBridgeHandler` 签名（同步 —— 阻塞项来源） | 159（外部工程） |
 | `../../../../pi-desktop-hos/src-main/main.js` | 旧壳参考：`:339-357` 主目录、`:374-408` 权限、`:1090-1147` 外链、`:962-1004` 窗口状态 | 1314（外部工程） |
 
 ---

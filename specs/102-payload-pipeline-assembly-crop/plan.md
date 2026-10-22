@@ -2,8 +2,8 @@
 
 > 模块：`102`（规划 §14.2）· 交付物：[`spec.md`](spec.md) + 本文件 · 现状：**未开始**（`resfile/pi-web/` 仅 `README.md`；骨架期载荷 = `rawfile/selfcheck.js`）
 > 依据：规划 [`../../docs/000-工程规划.md`](../../docs/000-工程规划.md) **§2.3 / §7 全部 / §8.3 / §8.4 / §11 Phase 1 第 1·2 条 / §12 R5·R6·A1·A2 / 附录 C**；
-> 运行时契约 [`../../../ohos-node-bridge/docs/000-工程规划.md`](../../../ohos-node-bridge/docs/000-工程规划.md) **§5.5 / §5.6 / §5.10 第 10 条**；
-> 冻结接口契约 [`../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md) **§3.1~§3.7 / §5**；
+> 运行时契约 [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md) **§5.5 / §5.6 / §5.10 第 10 条**；
+> 冻结接口契约 [`ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/logs/20261016-1/IMPLEMENTATION_CONTRACT.md) **§3.1~§3.7 / §5**；
 > 宪法 [`../constitution.md`](../constitution.md)（A2/A4/A6/A9 + T4/T5/T8/T9）；旧壳资产 [`../../../pi-desktop-hos/src-main/main.js`](../../../pi-desktop-hos/src-main/main.js)。
 > 标注：**✅ 已落地/已实测** / **⬜ 规划未实现（Phase N）** / ⚠️ **冲突·风险**。
 
@@ -21,7 +21,7 @@
 | 归档路线 | 单个 `tar.gz` + **Node 自己**解包（`zlib` + `fs`），幂等 marker 在可写根 | 库 §5.5、冻结契约 §3.1/§3.2 |
 | 可写布局 | `<filesDir>/{payload, tmp, pi-agent, pi-web-cache, pi-cwd}` | `../overall-data-model.md` §4.2 |
 | 库侧载荷接口（冻结） | `scriptPath` / `entry` / `payloadRoot` / `archive` / `archiveSha256` / `readonlyRoot` / `argv` / `execArgv` / `flags` / `env` / `cwd` / `capBytes` / `logRingSize` / `jitless` / `libDir` / `homeDir` / `logPath` | ⚠️ **契约已冻结、库实现未到位**：现库 `Types.ets` 只有 5 字段 ⇒ Phase 1 必须与库对齐（`../overall-data-model.md` §1.3） |
-| 构建环境 | Git-Bash + Node ≥ 18（host 侧脚本）；`DEVECO_SDK_HOME`、`hvigorw.bat`（HAP 组装） | ✅ `scripts/provision-runtime.sh:17-30`、规划 §14.3 |
+| 构建环境 | Git-Bash + Node ≥ 18（host 侧脚本）；`DEVECO_SDK_HOME`、`hvigorw.bat`（HAP 组装）；`ohpm.bat`（装中心仓包） | ✅ `oh-package.json5`、规划 §14.3 |
 | 大小写纪律 | `strictMode.caseSensitiveCheck: true`（✅ `build-profile.json5:38-40`）⇒ 载荷内路径大小写**必须**一致；从大小写不敏感的开发机搬到设备上会暴露冲突 | ⚠️ 本模块组装期必须校验（§6.2 步骤 6） |
 
 ---

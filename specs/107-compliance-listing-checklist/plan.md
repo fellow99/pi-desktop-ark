@@ -129,7 +129,7 @@
 | 诊断开关 / 诊断面板的调试入口 | 壳层（`103`/`101`） | release 构建 UI 检索（无入口） | ⬜ |
 | 骨架期自检载荷与调试端点（`/facts`、`/log`） | `entry/src/main/resources/rawfile/selfcheck.js`（现为**唯一**可读回通道） | release 产物内该文件与端点**不存在** | ⬜ Phase 3（Phase 1–2 必须保留） |
 | 调试用启动参数通道（`probeFlags`） | `EntryAbility.onCreate` 读 `want.parameters` | release 构建**屏蔽**该读取（或忽略） | ⬜ |
-| 样例工程/探针 Ability | 独立工程（`ohos-node-bridge/samples/minimal-app`，包名 `org.fellow99.nodebridge.sample`） | 不在发布物依赖闭包内 + 安装前 force-stop（它占固定端口） | ⬜ 隔离声明 |
+| 样例工程/探针 Ability | 独立工程（库仓库 [ohos-node-bridge/samples/minimal-app](https://github.com/fellow99/ohos-node-bridge/tree/main/samples/minimal-app)，包名 `org.fellow99.nodebridge.sample`） | 不在发布物依赖闭包内 + 安装前 force-stop（它占固定端口） | ⬜ 隔离声明 |
 | 签名材料样本 / 本地签名文件 | 仓库根 `signing.debug.local.json.sample`、`build-profile.json5` 本地改动 | 不入库 + 不进发布物 | ✅ 现状（T3） |
 
 ### 4.7 安装/授权事实（写入材料，`spec.md` §4.3）
@@ -231,10 +231,10 @@
 | `payload/THIRD-PARTY-NOTICES.md`（随包 + 仓库副本；staging 目录已存在） | G4 归并清单 | ⬜ 待创建 |
 | `docs/evidence/YYYY-MM-DD-compliance.md` | 合规证据归档（截图、清单、检索输出） | ⬜ 待创建 |
 | `build-profile.json5` | 签名指针（发布 vs 调试，T3/`FR-107-021`） | 61（现状 ✅，含本地未提交改动） |
-| `../../../ohos-node-bridge/runtime.lock.json` | 运行时来源与 SHA-256（G4/G5） | 外部工程 |
-| `../../../ohos-node-bridge/THIRD-PARTY-NOTICES.md` | **库侧许可清单交付物（尚未产出，G4 阻塞项）** | 外部工程 ⚠️ 不存在 |
-| `../../../ohos-node-bridge/tools/ohos-selfsign.mjs` | `.codesign` 补签工具（服务独立分发，**不含**绕行实现 —— G11 核对对象之一） | 外部工程 |
-| `../../../ohos-node-bridge/docs/000-工程规划.md` | G5 的实测依据（§D.6/§D.9）与 §9.5 库侧配合项 | 外部工程 |
+| 库侧 `runtime.lock.json`（随主包 HAR rawfile 分发：`node_bridge/runtime.lock.json`） | 运行时来源与 SHA-256（G4/G5） | ohpm 包内 |
+| 库侧 `THIRD-PARTY-NOTICES.md`（随主包 HAR rawfile 分发：`node_bridge/THIRD-PARTY-NOTICES.md`；运行时包另带 Node.js LICENSE 原文） | 库侧许可清单交付物 | ohpm 包内 |
+| 库仓库 `tools/ohos-selfsign.mjs`（[ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge)） | `.codesign` 补签工具（服务独立分发，**不含**绕行实现 —— G11 核对对象之一） | 外部工程 |
+| `ohos-node-bridge/docs/000-工程规划.md` | G5 的实测依据（§D.6/§D.9）与 §9.5 库侧配合项 | 外部工程 |
 
 ---
 

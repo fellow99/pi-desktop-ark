@@ -1,7 +1,7 @@
 # overall-data-model.md —— `pi-desktop-ark` 数据模型
 
 > 本文只写**数据与状态**：壳侧常量/状态、状态机迁移、环境变量契约、文件系统布局、权限模型、载荷体积、HTTP 数据面。
-> 依据：规划 [`../docs/000-工程规划.md`](../docs/000-工程规划.md) **§6.3 / §7.2 / §7.4 / §10**；库文档 `../../ohos-node-bridge/docs/000-工程规划.md` **§6.2 共享事实 / §D.8 偏差表 / §D.10 ⑰⑱**；本工程实测 [`../docs/ACL配置.md`](../docs/ACL配置.md)。
+> 依据：规划 [`../docs/000-工程规划.md`](../docs/000-工程规划.md) **§6.3 / §7.2 / §7.4 / §10**；库文档 [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md)（上游库仓库）**§6.2 共享事实 / §D.8 偏差表 / §D.10 ⑰⑱**；本工程实测 [`../docs/ACL配置.md`](../docs/ACL配置.md)。
 > 标注：**✅ 已落地**（含 `path:line`）/ **⬜ 规划未实现（Phase N）**。
 
 ---
@@ -31,7 +31,7 @@
 
 `PiDesktopRuntime` 单例字段：`state: UIState`（初始 `IDLE`）、`port: number`（初始 `DEFAULT_PORT`）、`lastError: string`（初始 `''`）；只读访问器 `getState()` / `getPort()` / `getLastError()` / `getUrl()`。
 
-### 1.3 库侧类型（消费面，✅ 逐项核实于 `ohos-node-bridge/library`）
+### 1.3 库侧类型（消费面，✅ 逐项核实于 [ohos-node-bridge/library](https://github.com/fellow99/ohos-node-bridge/tree/main/library)）
 
 | 类型/成员 | 形态 | 本工程用法 |
 |---|---|---|
@@ -230,9 +230,9 @@ entry/src/main/resources/                    # 随包（只读）
 |---|---|---|
 | `pi-dist` 总量 | **884,167,367 B** / ≈**27.2k** 文件 | `du -sb` |
 | `pi-dist` → `tar.gz` | **156,592,393 B**（≈149 MiB） | `stat` |
-| 库产物 `libnode.so` | 126,809,264 B（部署名；上游名 `libnode-arm64.so`；SHA-256 `3019bf5f…51a1`） | `entry/libs/arm64-v8a/` |
-| 库产物 `libc++_shared.so` | 1,262,504 B（取自 ohos-sdk） | 同上 |
-| 库 HAR | **479,190 B**（2026-10-17 本机重建；含 `package/libs/arm64-v8a/libc++_shared.so` 1,262,504 B 与 `libnode_bridge.so` 28,040 B；**不含** `libnode.so`） | `library/build/default/outputs/default/library.har`（`tar -tzvf`） |
+| 运行时 `libnode.so` | 126,809,264 B（部署名；上游名 `libnode-arm64.so`；SHA-256 `3019bf5f…51a1`） | `@fellow99/node-runtime@24.2.0` 包内 `libs/arm64-v8a/`（ohpm 中心仓，hvigor 随 HAP 合并） |
+| 运行时 `libc++_shared.so` | 1,262,504 B | 同上（随 `@fellow99/node-runtime` 包分发） |
+| 库 HAR（`@fellow99/node-bridge@0.1.0`） | 中心仓发布版（含引导件 `libnode_bridge.so` + `libnode_host_client.so`；**不含** `libnode.so`） | ohpm 中心仓 `ohpm install`（历史：2026-10-17 本机重建 479,190 B，已退役） |
 | 签名 HAP（含载荷） | **46,031,244 B**（2026-10-17 实测；压缩开关落地前为 129,535,202 B / 全条目 STORED） | `entry/build/default/outputs/default/entry-default-signed.hap` |
 
 ### 6.2 HAP 内压缩状态（✅ 实测 2026-10-17；B4/R2 已修）

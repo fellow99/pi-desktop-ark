@@ -21,19 +21,20 @@ pi-desktop-ark/
 ├── build-profile.json5                         # ✅ 产品/签名指针（**签名材料不入库**，见 §2.2）
 ├── hvigorfile.ts                               # ✅ 签名注入（不覆盖 DevEco 写入的配置，只补指针）
 ├── hvigor/hvigor-config.json5                  # ✅ hvigor 模型版本 6.1.1（与 oh-package modelVersion 对齐）
-├── oh-package.json5                            # ✅ 顶层依赖：@fellow99/node-bridge 走 `file:./libs/*.har`
-├── oh-package-lock.json5                       # ✅ 锁文件（local registryType，版本 0.1.0）
+├── oh-package.json5                            # ✅ 顶层依赖：@fellow99/node-bridge + @fellow99/node-runtime（ohpm 中心仓版本号）
+├── oh-package-lock.json5                       # ✅ 锁文件（ohpm registryType：@fellow99/node-bridge 0.1.0 + @fellow99/node-runtime 24.2.0）
 ├── signing.debug.local.json.sample             # ✅ 签名材料模板（真实材料 gitignored）
-├── libs/
-│   └── @fellow99/node-bridge.har               # ⬜ 不入库：`scripts/build-bridge-har.sh` 产物（当前 441,353 B）
+├── libs/                                       # （已删除）历史本地 HAR 目录：现从 ohpm 中心仓取包，目录不再存在
+│   └── @fellow99/node-bridge.har               # 已删除：历史 file: 旁路依赖的本地 HAR（现走 ohpm 中心仓）
 ├── scripts/
-│   ├── build-bridge-har.sh                     # ✅ 构建库 HAR 并拷到 libs/@fellow99/
-│   └── provision-runtime.sh                    # ✅ 投放 libnode.so + libc++_shared.so（委托库 provision.mjs）
+│   ├── build-bridge-har.sh                     # 已删除（ohpm 中心仓包取代；脚本不再存在）
+│   └── provision-runtime.sh                    # 已删除（@fellow99/node-runtime 包取代；脚本不再存在）
+├── vendor/                                     # ✅ 库 payload 参考实现的本工程副本（node-bridge-payload/：bootstrap.js + host.js + lib/ + README）
 ├── entry/                                      # 主模块（唯一模块，HAP）
 │   ├── build-profile.json5                     # ✅ 模块构建选项（不编译 C++、nativeLib.collectAllLibs）
 │   ├── hvigorfile.ts                           # ✅ hapTasks（模块侧无自定义逻辑）
 │   ├── oh-package.json5                        # ✅ 模块名 entry / version 1.0.0（模块版本，与应用版本无关）
-│   ├── libs/arm64-v8a/                         # ⬜ 不入库：libnode.so（126,809,264 B）+ libc++_shared.so（1,262,504 B）
+│   ├── libs/arm64-v8a/                         # 已清空：运行时二进制改由 @fellow99/node-runtime 包内置（hvigor 随 HAP 合并；两种方式不并存）
 │   ├── build/                                  # ⬜ 构建产物（含 entry-default-signed.hap）
 │   └── src/main/
 │       ├── module.json5                        # ✅ 模块声明：deviceTypes/页面/Ability/权限声明面（见 §2.3）
@@ -168,16 +169,16 @@ pi-desktop-ark/
 
 | 路径 | 为什么不入库 | 谁生成 | 缺失时的后果 |
 |---|---|---|---|
-| `entry/libs/`（`libnode.so` 126.8 MB + `libc++_shared.so`） | 二进制 120+ MB，版本由锁文件管理（库附录 G.1「两层解耦」） | `scripts/provision-runtime.sh`（委托 `ohos-node-bridge/tools/provision.mjs`，SHA-256 + 七项 ELF 门禁） | HAP 里没有 Node ⇒ 启动必失败；脚本会明确报错，不会静默降级 |
-| `libs/**/*.har` | 库的**构建产物**（441,353 B），消费者应从 ohpm/构建流程取 | `scripts/build-bridge-har.sh` | `ohpm install` 找不到 `@fellow99/node-bridge` ⇒ 编译失败 |
+| ~~`entry/libs/`~~（历史：手工投放的 `libnode.so` + `libc++_shared.so`） | 运行时二进制 120+ MB，不入库 | **已退役**：运行时改由 ohpm 包 `@fellow99/node-runtime@24.2.0`（内含 `libs/arm64-v8a/libnode.so` + `libc++_shared.so`）经 hvigor 随 HAP 合并，SHA-256 由库侧 `runtime.lock.json` 锁定 | 本地残留同名 `.so` 会与包内冲突 —— **两种方式择一，不要同时放** |
+| `libs/**/*.har` | 库的构建产物不入库；消费方一律从 ohpm 中心仓取 | `ohpm install`（`@fellow99/node-bridge`） | 中心仓不可达 ⇒ 编译失败 |
 | `entry/src/main/resources/resfile/pi-web/*`（保留 `README.md`） | 载荷压后预估 70–90 MB（规划 §7.2），git 不适合 | Phase 1 的载荷组装脚本（⬜ 待建） | 主界面起来后 `/` 404（服务端无内容） |
 | `signing.*.local.json`、`*.p12`、`*.p7b`、`*.cer` | 签名私钥与口令（宪法 T3） | 开发者本机 / DevEco | 无材料 ⇒ 产出**未签名 HAP**（不能装机），不报错 |
 | `build-profile.json5` 的 `signingConfigs` 内容 | 同上（文件本身入库，材料属本地未提交改动） | DevEco「自动生成签名」 | 同上 |
 | `**/build/`、`**/.hvigor/`、`**/.cxx/`、`**/.preview/`、`oh_modules/`、`*.hap` | 构建产物与依赖缓存 | hvigor / ohpm | 无影响（可重建） |
 | `/.idea/`、`*.iml` | 编辑器状态 | DevEco | 无影响 |
-| （库仓库内，非本仓库）`../ohos-node-bridge/runtime/`（仅 `*.so` 不入库）、（父工程）`/_test` | 运行时缓存与探针工程 | 库侧 tooling | 缺产物时 `provision --download` 联网取（国内要 `NODE_USE_ENV_PROXY=1`）；2026-10-18 前缓存在父工程 `/ohos-node-runtime` |
+| （库仓库内，非本仓库）[ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge) `runtime/`（历史投放缓存的产物缓存目录，仅 `*.so` 不入库） | 已不再被本工程使用：运行时改由 ohpm 包 `@fellow99/node-runtime` 分发 | 库侧 tooling | 无影响（本工程不再本地投放运行时） |
 
-> ⚠️ **当前工作区状态**：`entry/libs/arm64-v8a/`、`libs/@fellow99/node-bridge.har`、`entry/build/**` **已存在于本机**（构建过），但它们都不在 git 索引里 —— 这是**正确状态**，不要顺手 `git add`。
+> ⚠️ **当前工作区状态**：`entry/build/**` 等构建产物可能已存在于本机，但它们都不在 git 索引里 —— 这是**正确状态**，不要顺手 `git add`。
 
 ---
 
@@ -199,12 +200,12 @@ pi-desktop-ark/
 
 | 兄弟工程 | 关系 | 依赖的具体物 | 断开的后果 |
 |---|---|---|---|
-| `../ohos-node-bridge` | **依赖（运行时库）** | `library/build/.../library.har`（经 `scripts/build-bridge-har.sh` 拷成 `libs/@fellow99/node-bridge.har`）＋ `tools/provision.mjs` ＋ `runtime.lock.json` | 构建/投放失败（脚本会指出 `BRIDGE=<路径>` 补救） |
+| `@fellow99/node-bridge` / `@fellow99/node-runtime` | **依赖（运行时库，ohpm 中心仓包）** | 主包 HAR（ArkTS API + NAPI 引导件 `libnode_bridge.so`）＋ 运行时包 HAR（`libnode.so`）；`ohpm install` 即得（[github.com/fellow99/ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge)） | 中心仓不可达/包缺失 ⇒ `ohpm install` 与编译失败 |
 | `../pi` | **上游（agent harness）** | 载荷内容的一部分（`@earendil-works/*`）；补丁纪律见规划 §9 | 载荷不完整 |
 | `../pi-web` | **上游（UI + Next 服务端）** | 载荷内容与 `/api/*`、SSE、鉴权源码事实（规划 §6.1） | 主界面无内容 |
 | `../pi-desktop-hos` | **资产来源与对标基线**（一次性退役） | 环境装配、进程内 Next 宿主、三个同名扩展、预置模板、工作区补丁、全部失败经验（规划 §8.3） | 需重新踩坑（不阻塞构建） |
 | `../harmonypc-electron` | **被推翻的对象** | 无（仅历史对照：`libelectron.so` 181 MB / HAP 320.3 MB 的合规与体积教训） | — |
-| `../pi-workspace`（父容器） | 容器仓库 | submodule 布局；运行时缓存 2026-10-18 起在 `../ohos-node-bridge/runtime/`（仅 `*.so` 不入库），此前为父容器同级 `../ohos-node-runtime/` | 脚本中的相对默认路径失效（可用 `BRIDGE=`/`OHOS_NODE_RUNTIME_DIR=` 覆盖） |
+| `../pi-workspace`（父容器） | 容器仓库 | submodule 布局（`ohos-node-bridge` 已移除：本工程改从 ohpm 中心仓取 `@fellow99/node-bridge` + `@fellow99/node-runtime`） | 脚本中的相对默认路径失效 |
 
 > 本工程是 `pi-workspace` 的 **submodule**，构建脚本按 `../` 解析兄弟目录（库规划 §7.1）⇒ **不要**把本工程单独拷出仓库根外构建。
 

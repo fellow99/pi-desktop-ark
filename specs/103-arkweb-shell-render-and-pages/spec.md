@@ -7,8 +7,8 @@
 > 需求关键字按 **RFC 2119**：**必须**（MUST）· **必须不**（MUST NOT）· **应**（SHOULD）· **可以**（MAY）。
 > 依据：[`constitution.md`](../constitution.md)（主约束：**A1 一切经 HTTP / A5 失败可见 / A6 不隐藏平台真相 / A7 判据可证伪**）·
 > 规划 [`../../docs/000-工程规划.md`](../../docs/000-工程规划.md) **§1.1 / §2.4 / §4 / §5 第 1·11·12·14·15 条 / §6.2 / §8.2 ①② / §11 Phase 1 / §12 的 R3·R4·A5 / §13 G1·G2** ·
-> 运行时契约 [`../../../ohos-node-bridge/docs/000-工程规划.md`](../../../ohos-node-bridge/docs/000-工程规划.md) **§5.10 第 6·7·8·9 条** ·
-> 冻结接口契约 [`../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)（日志条目 / 崩溃记录结构）。
+> 运行时契约 [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md) **§5.10 第 6·7·8·9 条** ·
+> 冻结接口契约 [`ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)（日志条目 / 崩溃记录结构）。
 > 证据标记：✅ **实测** / 🔶 **沿用** / ⬜ **待验证** / ⚠️ **冲突·风险**。项目级需求 `FR-ARK-*` 见 [`../overall-spec.md`](../overall-spec.md)。
 
 ---

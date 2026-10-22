@@ -2,8 +2,8 @@
 
 > 模块：`101`（规划 §14.2）· 交付物：[`spec.md`](spec.md)（要什么 + 验收判据）+ 本文件（怎么做）· 现状：**Phase 0 骨架已落地，Phase 1 未开始**
 > 依据：规划 [`../../docs/000-工程规划.md`](../../docs/000-工程规划.md) **§4 / §5 第 1·2·3·4·5·6·12·13·16 条 / §6.1 / §6.3 / §7.1 / §7.4 / §11 / §12 / §14.2 / §14.3**；
-> 运行时契约 [`../../../ohos-node-bridge/docs/000-工程规划.md`](../../../ohos-node-bridge/docs/000-工程规划.md) **§5.3 / §5.6 / §5.7 / §5.10 / §6.1 / §6.2**；
-> 冻结接口契约 [`../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](../../../ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)（**库侧唯一口径**）；
+> 运行时契约 [`ohos-node-bridge/docs/000-工程规划.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md) **§5.3 / §5.6 / §5.7 / §5.10 / §6.1 / §6.2**；
+> 冻结接口契约 [`ohos-node-bridge/logs/20261016-1/IMPLEMENTATION_CONTRACT.md`](https://github.com/fellow99/ohos-node-bridge/blob/main/logs/20261016-1/IMPLEMENTATION_CONTRACT.md)（**库侧唯一口径**）；
 > 宪法 [`../constitution.md`](../constitution.md)（A2/A3/A5/A8/A9/A10 为主约束）；本工程实测 [`../../docs/ACL配置.md`](../../docs/ACL配置.md)、`docs/evidence/2026-10-16-acl-jit-verified.md`（本地留存，不入库）。
 > 标注：**✅ 已落地**（带 `path:line`）/ **⬜ 规划未实现（Phase N）** / ⚠️ **与规划冲突或风险**。
 
@@ -16,9 +16,9 @@
 | 宿主形态 | ArkTS Stage 模型单模块应用（`entry`），设备类型 `2in1` / `tablet`；唯一页面 `pages/Index` | ✅ `entry/src/main/module.json5:7-10`、`entry/src/main/resources/base/profile/main_pages.json` |
 | 真机基线 | HAD-W24 / 7.0.0.107(SP7C00E100R13P5) / API 26 / OpenHarmony-7.0.0.105 / arm64-v8a；序列号 `3QC0226526001227` | ✅ `docs/evidence/2026-10-16-acl-jit-verified.md` |
 | API 口径 | `compatibleSdkVersion 5.0.5(17)`、`targetSdkVersion 6.1.1(24)`；⚠️ 与规划「API 26」口径不一致 | ⚠️ `build-profile.json5:33-36`、`AppScope/app.json5:11-12`（登记于 `../STRUCTURE.md` §2.1） |
-| 消费的库 | `@fellow99/node-bridge` **0.1.0**，以**构建好的 HAR**（441,353 B）经 `file:` 依赖接入 | ✅ `oh-package.json5:12`、`oh-package-lock.json5:14-20`、宪法 T7 |
-| 运行时产物 | `libnode.so` **126,809,264 B**（Node v24.2.0，SHA-256 `3019bf5f…51a1`）+ `libc++_shared.so` **1,262,504 B**（`388e0df2…b2f9`），由锁文件固化 | ✅ `entry/libs/arm64-v8a/`、库 `runtime.lock.json`（库 §D.9） |
-| 构建工具链（host） | Git-Bash + `hvigorw.bat`（`DEVECO_SDK_HOME=D:\oh-workspace\command-line-tools\sdk`）+ DevEco 自带 node（host 侧 `provision.mjs` 需 Node ≥ 18） | ✅ `scripts/provision-runtime.sh:17-30`、规划 §14.3 |
+| 消费的库 | `@fellow99/node-bridge` **0.1.0** ＋ `@fellow99/node-runtime` **24.2.0**，均来自 **ohpm 中心仓**（历史 `file:./libs/…har` 本地旁路已退役） | ✅ `oh-package.json5`、`oh-package-lock.json5`、宪法 T7 |
+| 运行时产物 | `libnode.so` **126,809,264 B**（Node v24.2.0，SHA-256 `3019bf5f…51a1`）+ `libc++_shared.so` **1,262,504 B**（`388e0df2…b2f9`），随 `@fellow99/node-runtime@24.2.0` 包分发，经 hvigor 随 HAP 合并 | ✅ ohpm 包内 `libs/arm64-v8a/`、库 `runtime.lock.json`（随主包 rawfile，库 §D.9） |
+| 构建工具链（host） | Git-Bash + `hvigorw.bat`（`DEVECO_SDK_HOME=D:\oh-workspace\command-line-tools\sdk`）+ `ohpm.bat`（装中心仓包） | ✅ `oh-package.json5`、规划 §14.3 |
 | 接口契约来源 | 冻结契约：`NodeState` 6 值、`NodeRuntimeOptions` 全字段、`logs()`/`lastCrash()`/`shutdown()`/`waitUntilRunning()`、日志行格式、崩溃 JSON、`envPairs` 编码 | ⚠️ 契约是**目标面**；当前库实现只暴露 6 个 API、`NodeRuntimeOptions` 仅 5 字段（`../overall-data-model.md` §1.3 已登记该缺口） |
 | 状态口径 | 壳侧 `UIState` 4 值（`idle`/`launching`/`running`/`failed`）与库 `NodeState` 并列；就绪**只**由壳侧探活成功后 `markRunning()` 写入 | ✅ `entry/src/main/ets/app/PiDesktopRuntime.ets:7-12,84,90` |
 
@@ -51,7 +51,7 @@
 | T4 二进制与大载荷不入库 | ✅ | `.gitignore:17-25` 排除 `entry/libs/`、`libs/**/*.har`、`resfile/pi-web/*`、`*.hap` |
 | T5 路径一律绝对 | ✅（本模块段） | `PiDesktopRuntime.ets:136-137` 用 `context.filesDir`；未依赖 `process.cwd()`（真机 `/`）与 `process.execPath`（真机 `/system/bin/appspawn`） |
 | T6 常量集中在 `common/Constants.ets` | ⚠️ | 端口/载荷/探活参数已集中（`Constants.ets:7,10,18,21,22,25-27`）；但阶段文案仍散在页面与编排层（`Index.ets:51`、`PiDesktopRuntime.ets:91`）⇒ Phase 1 把阶段文案收进常量模块（与 103 联做） |
-| T7 原生库只经 HAR 消费 | ✅ | `oh-package.json5:12` + `scripts/build-bridge-har.sh:4-11`（`00309001` 的处置） |
+| T7 原生库只经 HAR 消费 | ✅ | `oh-package.json5`（`@fellow99/node-bridge` + `@fellow99/node-runtime`，ohpm 中心仓版本号依赖） |
 | T8 日志谁写谁读 | ⚠️ | 读回通道存在（`/log` 端点、库 `Logger.tail`），但**壳侧未接**：`pages/Index.ets:69-72` 仍是占位文案 ⇒ Phase 1 实现（§9 第 5 条） |
 | T9 阶段分级标注 | ⚠️ | 代码注释用的是 `TODO(Phase 3)`（`entryability/EntryAbility.ets:57`）与 `TODO(Phase 1)`（`pages/Index.ets:70`），**不是** `⬜ 规划未实现（Phase N）` 口径；且 `onDestroy` 注释写 Phase 3，而规划把优雅关停列在 **Phase 2** ⇒ 注释与规划不一致，实现时必须按 T9 改写（登记于 §3 决策 9） |
 
@@ -61,8 +61,8 @@
 
 | # | 决策 | 替代方案（为何否掉） | 依据 |
 |---|---|---|---|
-| 1 | 库以**构建好的 HAR** 消费（`scripts/build-bridge-har.sh` 产出 → `libs/@fellow99/node-bridge.har`） | 跨工程**源码相对导入**：`useNormalizedOHMUrl: true` 下被 hvigor 拒 `00309001`（✅ 实测），且与真实消费方式不符 | 宪法 T7、规划 §7.5 |
-| 2 | 运行时投放**只保留一份实现**：`scripts/provision-runtime.sh` → `ohos-node-bridge/tools/provision.mjs` | 应用侧自写拷贝脚本：两份实现漂移 + 无 SHA/ELF 门禁；`--download` 的网络与代理细节也无处复用 | 规划 §14.3、库附录 G |
+| 1 | 库以 **ohpm 中心仓包（HAR）** 消费（`oh-package.json5` 写版本号依赖，`ohpm install` 拉取） | 跨工程**源码相对导入**：`useNormalizedOHMUrl: true` 下被 hvigor 拒 `00309001`（✅ 实测）；库已上架中心仓 ⇒ 常规依赖即是最贴近真实消费的方式 | 宪法 T7、规划 §7.5、库发布文档 §8 |
+| 2 | 运行时与库一律走 **ohpm 中心仓包**：`ohpm install @fellow99/node-bridge` + `ohpm install @fellow99/node-runtime@24.2.0`（历史的 `scripts/provision-runtime.sh` 手工投放已退役） | 应用侧自写拷贝脚本会与库侧实现漂移；中心仓包自带 SHA-256 门禁与版本锁定 | 规划 §14.3、库附录 G、库发布文档（提交到 OpenHarmony 三方库中心仓）§8 |
 | 3 | 编排采用**三段式 + 就绪探活**（物化 → 投递 → 探活） | ① 等 `start()` 的 `Promise` 代表可用：语义错误（只代表已投递，`NodeStartResult.ok` 定义如此）；② 只轮询库状态 `waitUntilRunning()`：⬜ 库侧尚未实现（冻结契约 §2.6 已承诺，当前 `NodeRuntime.ets` 无此方法）⇒ 现状自建探活循环，Phase 1 改为「库方法 + 端点收口」并存 | 冻结契约 §2.6、规划 §4 时序 |
 | 4 | 探活端点收口到**服务真实存在的路径**：候选 `/api/web-auth`（旧壳 `READY_PROBE_PATH`，`pi-desktop-hos/src-main/main.js:48`）；pi-web 供应 `/` 后也可用 `/` | 「非 0 即成功」或「只要连上就算」：会掩盖 404/错误页面（❌ 明确禁止） | ⚠️ `../ARCHITECTURE.md` §3.4（骨架载荷只答 `/facts`、`/log` ⇒ `/` 必 404 ⇒ `READY` 不可达） |
 | 5 | 端口**随机或先探测空闲**，实际端口由 **Node 侧回传**（`<filesDir>/payload/port`），壳只读不猜 | 固定 `15577`：✅ 实测会被别的应用占用 ⇒ `EADDRINUSE` ⇒ 整进程 abort；壳侧猜端口：§4.6 明确禁止 | ⑰、规划 §6.3、`docs/ACL配置.md` §3.1 |
@@ -155,8 +155,7 @@
 | `getState()` / `getPort()` / `getUrl()` / `getLastError()` | ArkTS | 状态查询（供 103 的 UI 与测试断言） | ✅ |
 | `Log.info/error(msg)` | ArkTS | hilog（`DOMAIN=0xD0033`、`TAG=PI_DESKTOP_ARK`） | ✅ `Constants.ets:29-37` |
 | `AppStorage['nodeFlags']` | KV | 生效的 Node 参数 | ✅ |
-| `scripts/build-bridge-har.sh` | CLI | 构建库 HAR 并拷贝到 `libs/@fellow99/node-bridge.har`；环境变量 `BRIDGE` / `HVIGORW`；失败 `exit 2` | ✅ `:26-33` |
-| `scripts/provision-runtime.sh [--check\|--download]` | CLI | 转发 `provision.mjs --out entry/libs/<ABI>`；环境变量 `BRIDGE` / `NODE` / `ABI` / `OHOS_NODE_RUNTIME_DIR`；失败 `exit 2` | ✅ `:20-46` |
+| ~~`scripts/build-bridge-har.sh`~~ / ~~`scripts/provision-runtime.sh`~~ | CLI | **已退役**：库与运行时改由 ohpm 中心仓包提供（`ohpm install`），不再本地构建/投放 | 历史 |
 | ⬜ 端口回传读取 | 文件读取 | 见 §4.6 | ⬜ Phase 1 |
 | ⬜ 关停入口 | ArkTS | `onPrepareToTerminate → runtime.shutdown(reason)` | ⬜ Phase 2 |
 
@@ -266,13 +265,12 @@ launch(ctx, flags):
 | `entry/src/main/ets/common/Constants.ets` | 端口/载荷/探活常量、`appUrl()`、hilog `Log` | **37** | ✅ |
 | `entry/src/main/ets/entryability/EntryAbility.ets` | Ability 生命周期、`probeFlags` → `AppStorage`、`loadContent` | **61** | ✅（⬜ 关停接线） |
 | `entry/src/main/module.json5` | 模块声明 + 24 权限 + 2 `definePermissions` + `taskKeeping` | **166** | ✅（⬜ `launchType`） |
-| `oh-package.json5` | 依赖接线（`file:./libs/@fellow99/node-bridge.har`） | **15** | ✅ |
+| `oh-package.json5` | 依赖接线（ohpm 中心仓版本号依赖：`@fellow99/node-bridge` + `@fellow99/node-runtime`） | ✅ |
 | `oh-package-lock.json5` | 锁文件（`0.1.0`，`registryType: local`） | **18** | ✅ |
-| `scripts/build-bridge-har.sh` | 构建库 HAR 并拷贝（`00309001` 的处置） | **41** | ✅ |
-| `scripts/provision-runtime.sh` | 转发 `provision.mjs`（幂等 + 门禁） | **46** | ✅ |
-| `libs/@fellow99/node-bridge.har` | 库构建产物（含引导件 `libnode_bridge.so`） | 二进制 **441,353 B** | ✅（不入库，T4） |
-| `entry/libs/arm64-v8a/libnode.so` | Node v24.2.0 运行时 | 二进制 **126,809,264 B** | ✅（不入库） |
-| `entry/libs/arm64-v8a/libc++_shared.so` | C++ 运行时 | 二进制 **1,262,504 B** | ✅（不入库） |
+| ~~`scripts/build-bridge-har.sh`~~ / ~~`scripts/provision-runtime.sh`~~ | 已退役（ohpm 中心仓包取代） | — | 历史 |
+| ~~`libs/@fellow99/node-bridge.har`~~ | 历史 `file:` 旁路的本地 HAR | — | **已删除**：改由 ohpm 中心仓 `@fellow99/node-bridge@0.1.0`（T4 不入库口径不变） |
+| ~~`entry/libs/arm64-v8a/libnode.so`~~ | Node v24.2.0 运行时 | — | **已删除**：改由 `@fellow99/node-runtime@24.2.0` 包内置，hvigor 随 HAP 合并 |
+| ~~`entry/libs/arm64-v8a/libc++_shared.so`~~ | C++ 运行时 | — | **已删除**：同上（随 `@fellow99/node-runtime` 包分发） |
 | `hvigorfile.ts` | 签名材料注入 / 补 `products[].signingConfig` 指针 | **152** | ✅ |
 | `build-profile.json5` | 产品、SDK、`useNormalizedOHMUrl`、本机签名材料（未提交） | **61** | ✅（T3） |
 | `entry/build-profile.json5` | 模块构建（`collectAllLibs`，不编译 C++） | **17** | ✅ |
