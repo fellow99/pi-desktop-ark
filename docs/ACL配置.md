@@ -178,3 +178,26 @@ curl -s "http://127.0.0.1:18400/api/cwd/browse?root=documents"
    建议区分 `ENOENT`（设备没有该目录）与 `EACCES`（没授权），并让 UI 分别提示。
 4. "应用设置里看不到权限开关"是**结果不是原因**：`user_grant` 权限只有**成功授予过**才会在「应用 → 权限」里出现可点项；
    手机上从未授权成功，所以没有开关。2in1/平板授权成功后即出现。
+
+---
+
+## 附录：ohos-node-bridge → ohpm 双包迁移说明（2026-10-22）
+
+> 本文档正文保留写作时的历史口径（旁路同级目录、手工投放等描述**不逐处改写**），迁移变动以本附录为准：
+
+1. **库与运行时已上架 OpenHarmony ohpm 中心仓**（2026-10-22）：`@fellow99/node-bridge@0.1.0`（ArkTS API + NAPI 引导件）
+   与 `@fellow99/node-runtime@24.2.0`（`libnode.so` + `libc++_shared.so`，版本 = Node 版本）。库源码仓库：
+   [github.com/fellow99/ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge)。
+2. **`pi-desktop-ark` 改为常规 ohpm 版本号依赖**（`oh-package.json5`），父工程已移除 `ohos-node-bridge` submodule；
+   历史的 `file:./libs/@fellow99/node-bridge.har` 本地旁路与 `scripts/build-bridge-har.sh` **退役**。
+3. **运行时不再手工投放**：`scripts/provision-runtime.sh`（委托 `tools/provision.mjs`）退役，
+   `libnode.so`/`libc++_shared.so` 由 `@fellow99/node-runtime` 的 HAR 经 hvigor 随 HAP 合并
+   （`libnode.so` SHA-256 = `3019bf5f…51a1`，与锁值逐字一致，HAP 解包实测）。
+4. **库载荷三件 vendored**：`bootstrap.js` / `host.js` / `lib/tar-extract.js` 不随 HAR 分发，
+   已自持到 `vendor/node-bridge-payload/`（与原 `ohos-node-bridge/payload/` 逐字一致），
+   `scripts/assemble-payload.mjs` 默认源改指该目录。
+5. **相对路径引用失效**：正文中指向 `../ohos-node-bridge/` 的运行时契约 / 冻结契约链接，一律改为 GitHub 仓库对应路径。
+6. **迁移后真机复测通过**（2026-10-22，HUAWEI MateBook Pro `3QC0226526001227`）：
+   构建 → 安装 → Node v24.2.0 进程内就绪 → `GET /` 200（pi-web SPA）→ `/api/web-auth` 免密放行。
+
+> 迁移不影响本文结论：ACL 申报口径（按宿主包名、Profile 含 ACL 才能装机）不变；仅运行时二进制来源改为 ohpm 包。

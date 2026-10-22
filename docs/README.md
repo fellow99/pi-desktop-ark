@@ -27,3 +27,25 @@
 - ~~与 `pi-desktop-hos` 的能力对齐矩阵（§8.1）落地成可验收清单~~ → ✅ 已落地：[`001-能力复刻评估.md`](001-能力复刻评估.md)（as-built 判定 + 未实现项前置/难度 + 不可实现项）
 - 鉴权路线的最终选型（loopback 免密 vs 局域网 + 密码 + Cookie 注入，§6.2）；
 - ArkWeb 探针结论（P0-3）与载荷路线定稿（P0-13，`resfile` 直读 vs `tar.gz` 自解包）。
+
+---
+
+## 附录：ohos-node-bridge → ohpm 双包迁移说明（2026-10-22）
+
+> 本文档正文保留写作时的历史口径（旁路同级目录、手工投放等描述**不逐处改写**），迁移变动以本附录为准：
+
+1. **库与运行时已上架 OpenHarmony ohpm 中心仓**（2026-10-22）：`@fellow99/node-bridge@0.1.0`（ArkTS API + NAPI 引导件）
+   与 `@fellow99/node-runtime@24.2.0`（`libnode.so` + `libc++_shared.so`，版本 = Node 版本）。库源码仓库：
+   [github.com/fellow99/ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge)。
+2. **`pi-desktop-ark` 改为常规 ohpm 版本号依赖**（`oh-package.json5`），父工程已移除 `ohos-node-bridge` submodule；
+   历史的 `file:./libs/@fellow99/node-bridge.har` 本地旁路与 `scripts/build-bridge-har.sh` **退役**。
+3. **运行时不再手工投放**：`scripts/provision-runtime.sh`（委托 `tools/provision.mjs`）退役，
+   `libnode.so`/`libc++_shared.so` 由 `@fellow99/node-runtime` 的 HAR 经 hvigor 随 HAP 合并
+   （`libnode.so` SHA-256 = `3019bf5f…51a1`，与锁值逐字一致，HAP 解包实测）。
+4. **库载荷三件 vendored**：`bootstrap.js` / `host.js` / `lib/tar-extract.js` 不随 HAR 分发，
+   已自持到 `vendor/node-bridge-payload/`（与原 `ohos-node-bridge/payload/` 逐字一致），
+   `scripts/assemble-payload.mjs` 默认源改指该目录。
+5. **相对路径引用失效**：正文中指向 `../ohos-node-bridge/` 的运行时契约 / 冻结契约链接，一律改为 GitHub 仓库对应路径。
+6. **迁移后真机复测通过**（2026-10-22，HUAWEI MateBook Pro `3QC0226526001227`）：
+   构建 → 安装 → Node v24.2.0 进程内就绪 → `GET /` 200（pi-web SPA）→ `/api/web-auth` 免密放行。
+

@@ -10,10 +10,10 @@
 | 版别 | **HarmonyOS Edition**（`pi-desktop-ark`） |
 | 应用名（桌面/窗口标签）/ 包名 | Pi Desktop Ark / `org.fellow99.pi.PiDesktopArk` |
 | 目标设备 | `2in1` / `tablet` / `phone` / `tv`（同一产物，四种形态均已声明；已在 2in1、tablet、phone 真机验证） |
-| 后端 | `@fellow99/node-bridge` 起的 Node v24.2.0（进程内，`dlopen` + `node::Start`） |
+| 后端 | `@fellow99/node-bridge` + `@fellow99/node-runtime`（均 ohpm 中心仓包）起的 Node v24.2.0（进程内，`dlopen` + `node::Start`） |
 | 前端 | ArkWeb 加载 `http://127.0.0.1:<port>/`（页面由本地服务渲染，同源零 CORS） |
 | 当前状态 | **骨架**：依赖接线与编译构建已通；载荷、鉴权、能力对齐待 Phase 1–3 |
-| 规划文档 | [`docs/000-工程规划.md`](docs/000-工程规划.md)（v0.1，**结论以它为准**）；运行时契约见 `ohos-node-bridge/docs/000-工程规划.md` §6 |
+| 规划文档 | [`docs/000-工程规划.md`](docs/000-工程规划.md)（v0.1，**结论以它为准**）；运行时契约见 [ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge) `docs/000-工程规划.md` §6 |
 
 ## 目录
 
@@ -27,7 +27,8 @@ pi-desktop-ark/
 │   ├── src/main/ets/common/        # 常量与日志（含 BuildConfig：编译期形态开关）
 │   ├── src/main/resources/rawfile/ # boot.html（首屏，必须有）
 │   └── src/main/resources/resfile/pi-web/  # ← 应用载荷落点（gitignored，见其 README）
-├── scripts/provision-runtime.sh    # 投放运行时（委托 ohos-node-bridge/tools/provision.mjs）
+├── scripts/                        # 载荷组装等构建脚本（assemble-payload.mjs 为核心）
+├── vendor/node-bridge-payload/     # 库载荷三件 vendored（bootstrap/host/tar-extract，不随 HAR 分发）
 ├── hvigorfile.ts                   # 签名注入（仓库内不落密钥）
 └── signing.debug.local.json.sample # 签名材料模板
 ```
@@ -35,8 +36,8 @@ pi-desktop-ark/
 ## 构建
 
 ```bash
-# ① 投放运行时（libnode.so ≈121 MB + libc++_shared.so）—— 必须先做，否则 HAP 里没有 Node
-./scripts/provision-runtime.sh            # 或 --check / --download（国内需 NODE_USE_ENV_PROXY=1）
+# ① 安装依赖（主包 API + 运行时引擎，均来自 ohpm 中心仓）—— 必须先做，否则 HAP 里没有 Node
+ohpm install                              # @fellow99/node-bridge@0.1.0 + @fellow99/node-runtime@24.2.0
 
 # ② 构建 HAP
 export DEVECO_SDK_HOME='D:\oh-workspace\command-line-tools\sdk'
@@ -69,8 +70,8 @@ cmd //c "D:\oh-workspace\command-line-tools\bin\hvigorw.bat assembleHap --mode m
 | ② **不做运行期切换，只在编译期切换** | 运行期**没有**调试参数（`probeFlags` / `piNodeMode` 已移除）、没有设置项、没有 ACL 探测参与决策；出 jit 变体 = 改 `BuildConfig.NODE_MODE = 'jit'` 后重新构建 |
 | ③ **compat 形态禁用 code-mode** | 代码沙箱（`quickjs-wasi`）依赖 `WebAssembly`，compat 下自检即失败 ⇒ code-mode 工具**不注册**，本版不提供替代沙箱 |
 
-为什么是 compat：`--jitless` 是**进程级**形态，而进程内 Node 每进程只能起一次、失败即终态（`ohos-node-bridge` 契约 §2.6）——
-一次形态误判就是整机不可用。且实测证明"权限位授予"不能当 JIT 可用性预检：手机 `JUY-AL80` 上
+为什么是 compat：`--jitless` 是**进程级**形态，而进程内 Node 每进程只能起一次、失败即终态（`@fellow99/node-bridge` 运行时契约 §2.6）——
+一次形态误判就是整机不可用（`@fellow99/node-bridge` 运行时契约 §2.6）。且实测证明"权限位授予"不能当 JIT 可用性预检：手机 `JUY-AL80` 上
 `ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY` 查询为**已授予**，按 jit 启动仍在 `libnode_bridge` 内
 **SIGTRAP** 秒崩（同一 HAP 改 compat 则 1.6 s 正常就绪）。
 
@@ -84,16 +85,19 @@ ArkWeb 页面渲染**均不受影响**（同一份 WASM 依赖链已在载荷侧
 
 ## 运行时状态与被观测的事实
 
-- `scripts/provision-runtime.sh` 走的是**唯一一份**投放实现（`ohos-node-bridge/tools/provision.mjs`），
-  版本与 SHA-256 固化在 `ohos-node-bridge/runtime.lock.json`，投放前跑七项 ELF 门禁；
+- 运行时与库一律取自 **ohpm 中心仓包**：`@fellow99/node-bridge`（ArkTS API + NAPI 引导件）+
+  `@fellow99/node-runtime@24.2.0`（`libnode.so` + `libc++_shared.so` 随 HAP 合并）；
+  版本与 SHA-256 锁在库侧 `runtime.lock.json`（随主包 rawfile 分发），`ohpm install` 即得；
+  历史 `scripts/provision-runtime.sh` 手工投放已退役（本机同名 `.so` 残留会与包内冲突，两种方式择一）；
 - 启动链路：`PiDesktopRuntime.launch()` → `NodeRuntime.start()`（投递）→ **探活** `http://127.0.0.1:<port>/`；
   只有探活成功才是 `READY`（`start()` 返回 ok 只代表已投递）；
 - 崩溃是**终态**：进程内 Node 无法在应用内重启，只能靠 `<filesDir>/payload/node.log` 取证 + 提示用户重启应用。
 
-## 已知限制（继承自运行时，见 `ohos-node-bridge/docs/000-工程规划.md`）
+## 已知限制（继承自运行时，见 [ohos-node-bridge/docs/000-工程规划.md](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/000-工程规划.md)）
 
 `node::Start` 每进程一次 · `process.cwd() = /` · `process.execPath = /system/bin/appspawn` ·
-`os.cpus()` 长度 0 · `dlopen` 只认裸名 `libnode.so` · 无 ACL 时必须 `--jitless`。
+`os.cpus()` 长度 0 · `dlopen` 实际命中的候选是设备 ABI 目录 `libs/arm64/`（`libs/arm64-v8a/` 与裸名为兼容分支，
+✅ 库侧真机实测纠正） · 无 ACL 时必须 `--jitless`。
 
 ## 许可
 

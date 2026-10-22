@@ -251,3 +251,26 @@ dshm 的连锁（不申请 JIT ⇒ `--jitless` ⇒ `WebAssembly === undefined`�
 |---|---|---|
 | 1 | 2026-10-17 | 初版：§0–§9 + 附录。含 §4 对 E18 归因的更正（基于本机 `llvm-nm`/`llvm-readelf` 实测） |
 | 2 | 2026-10-17 | **拆库/应用边界**：libnode 链条、addon 闭包、文件信箱协议**迁入** [`ohos-node-bridge/docs/002`](../../ohos-node-bridge/docs/002-DSHM对照分析与可借鉴点.md)；本文件收敛为应用侧（载荷/就绪/工作区/激活/门禁/观测/jitless），并新增 §3.2 pid 校验、§10 能力实现顺序（E14/E17/E19/E20/E21）、§8 两条实测反例（hdc 可读、dumpLayout 可用） |
+
+---
+
+## 附录：ohos-node-bridge → ohpm 双包迁移说明（2026-10-22）
+
+> 本文档正文保留写作时的历史口径（旁路同级目录、手工投放等描述**不逐处改写**），迁移变动以本附录为准：
+
+1. **库与运行时已上架 OpenHarmony ohpm 中心仓**（2026-10-22）：`@fellow99/node-bridge@0.1.0`（ArkTS API + NAPI 引导件）
+   与 `@fellow99/node-runtime@24.2.0`（`libnode.so` + `libc++_shared.so`，版本 = Node 版本）。库源码仓库：
+   [github.com/fellow99/ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge)。
+2. **`pi-desktop-ark` 改为常规 ohpm 版本号依赖**（`oh-package.json5`），父工程已移除 `ohos-node-bridge` submodule；
+   历史的 `file:./libs/@fellow99/node-bridge.har` 本地旁路与 `scripts/build-bridge-har.sh` **退役**。
+3. **运行时不再手工投放**：`scripts/provision-runtime.sh`（委托 `tools/provision.mjs`）退役，
+   `libnode.so`/`libc++_shared.so` 由 `@fellow99/node-runtime` 的 HAR 经 hvigor 随 HAP 合并
+   （`libnode.so` SHA-256 = `3019bf5f…51a1`，与锁值逐字一致，HAP 解包实测）。
+4. **库载荷三件 vendored**：`bootstrap.js` / `host.js` / `lib/tar-extract.js` 不随 HAR 分发，
+   已自持到 `vendor/node-bridge-payload/`（与原 `ohos-node-bridge/payload/` 逐字一致），
+   `scripts/assemble-payload.mjs` 默认源改指该目录。
+5. **相对路径引用失效**：正文中指向 `../ohos-node-bridge/` 的运行时契约 / 冻结契约链接，一律改为 GitHub 仓库对应路径。
+6. **迁移后真机复测通过**（2026-10-22，HUAWEI MateBook Pro `3QC0226526001227`）：
+   构建 → 安装 → Node v24.2.0 进程内就绪 → `GET /` 200（pi-web SPA）→ `/api/web-auth` 免密放行。
+
+> 迁移不影响本文结论；REV 2 中「迁入库文档 [`ohos-node-bridge/docs/002`](../../ohos-node-bridge/docs/002-DSHM对照分析与可借鉴点.md)」的相对路径链接现指向 [GitHub 仓库同名文档](https://github.com/fellow99/ohos-node-bridge/blob/main/docs/002-DSHM对照分析与可借鉴点.md)。

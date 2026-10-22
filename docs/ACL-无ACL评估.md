@@ -302,3 +302,26 @@ ArkWeb 页面渲染（独立进程的 JS 引擎，与 V8 jitless 无关）· 对
 > 为什么不是"默认 jit、ACL 探测兜底"：手机 `JUY-AL80` 上 `ALLOW_WRITABLE_CODE_MEMORY` 查询**已授予**，但按 jit 启动
 > 进程在 `libnode_bridge` 内 **SIGTRAP(TRAP_BRKPT)** 秒崩（同一 HAP 改 compat 1.6 s 就绪）⇒ 权限位不是 JIT 可用性的预检；
 > 而一次误判 = 终态 `failed`（进程内 Node 不能重启），代价远大于 compat 的 7–10× 变慢。
+
+---
+
+## 附录：ohos-node-bridge → ohpm 双包迁移说明（2026-10-22）
+
+> 本文档正文保留写作时的历史口径（旁路同级目录、手工投放等描述**不逐处改写**），迁移变动以本附录为准：
+
+1. **库与运行时已上架 OpenHarmony ohpm 中心仓**（2026-10-22）：`@fellow99/node-bridge@0.1.0`（ArkTS API + NAPI 引导件）
+   与 `@fellow99/node-runtime@24.2.0`（`libnode.so` + `libc++_shared.so`，版本 = Node 版本）。库源码仓库：
+   [github.com/fellow99/ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge)。
+2. **`pi-desktop-ark` 改为常规 ohpm 版本号依赖**（`oh-package.json5`），父工程已移除 `ohos-node-bridge` submodule；
+   历史的 `file:./libs/@fellow99/node-bridge.har` 本地旁路与 `scripts/build-bridge-har.sh` **退役**。
+3. **运行时不再手工投放**：`scripts/provision-runtime.sh`（委托 `tools/provision.mjs`）退役，
+   `libnode.so`/`libc++_shared.so` 由 `@fellow99/node-runtime` 的 HAR 经 hvigor 随 HAP 合并
+   （`libnode.so` SHA-256 = `3019bf5f…51a1`，与锁值逐字一致，HAP 解包实测）。
+4. **库载荷三件 vendored**：`bootstrap.js` / `host.js` / `lib/tar-extract.js` 不随 HAR 分发，
+   已自持到 `vendor/node-bridge-payload/`（与原 `ohos-node-bridge/payload/` 逐字一致），
+   `scripts/assemble-payload.mjs` 默认源改指该目录。
+5. **相对路径引用失效**：正文中指向 `../ohos-node-bridge/` 的运行时契约 / 冻结契约链接，一律改为 GitHub 仓库对应路径。
+6. **迁移后真机复测通过**（2026-10-22，HUAWEI MateBook Pro `3QC0226526001227`）：
+   构建 → 安装 → Node v24.2.0 进程内就绪 → `GET /` 200（pi-web SPA）→ `/api/web-auth` 免密放行。
+
+> 迁移不影响本文的 ACL / JIT 结论：ACL 仍由宿主应用按自己包名申报，`--jitless` 形态决策（编译期 `NODE_MODE`）不变；仅 `libnode_bridge.so` / `libnode.so` 的**来源**从手工投放改为 ohpm 包（内容与 SHA 同源同值）。
