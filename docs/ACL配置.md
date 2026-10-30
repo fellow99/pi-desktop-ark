@@ -13,6 +13,26 @@
 | `definePermissions` | `LOCK_WINDOW_CURSOR`、`kernel.ALLOW_WRITABLE_CODE_MEMORY` | ✅ 一致（受限权限两处成对出现） |
 | Ability 后台模式 | `EntryAbility.backgroundModes = ["taskKeeping"]` | ✅ 与 `electron` 模块一致 |
 
+### 1.0 「预申请但应用侧未接线」权限盘点（2026-10-29 源码核实）
+
+下列权限继承自 `web_engine` 基线、仍在 `entry/src/main/module.json5` 的声明面中，但全 `entry/src/main/ets/**`
+**没有任何对应 Kit 调用**（grep 不到 PrintKit / userAuth / 窗口置顶 / 截屏 / 传感器调用）。上架问询时需能解释；
+后续要么接线、要么随收窄声明面一并移除（与 REV-5/6/7 撤销三项同纪律）：
+
+| 权限 | 名义能力 | ETS 调用现状 |
+| --- | --- | --- |
+| `ohos.permission.PRINT` | 打印 | 0 处 |
+| `ohos.permission.ACCESS_BIOMETRIC` | 生物识别 | 0 处 |
+| `ohos.permission.WINDOW_TOPMOST` | 窗口置顶 | 0 处 |
+| `ohos.permission.PRIVACY_WINDOW` | 隐私窗 | 0 处 |
+| `ohos.permission.CUSTOM_SCREEN_CAPTURE` | 自定义录屏 | 0 处 |
+| `ohos.permission.GYROSCOPE` / `ACCELEROMETER` | 陀螺仪 / 加速度计 | 0 处 |
+| `ohos.permission.GET_FILE_ICON` | 文件图标 | 0 处 |
+| `ohos.permission.LOCK_WINDOW_CURSOR` | 锁定光标 | 0 处（另在 definePermissions 成对出现） |
+
+> 注：这些是**声明面冗余**，不影响运行（compat 形态只依赖 INTERNET / GET_NETWORK_INFO / 内核三件与
+> `KEEP_BACKGROUND_RUNNING`、文档/下载两个 user_grant）。合规清单（spec 107）下一轮应把「预申请未上线」逐项标注。
+
 ### 1.1 ACL（受限权限，需按本包名申请）：现役 **1 项**
 
 | # | 权限 | 用途 | 判定 |

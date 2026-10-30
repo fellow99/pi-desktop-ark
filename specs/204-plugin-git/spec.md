@@ -1,6 +1,6 @@
 # 插件·GIT 操作（204-plugin-git）—— 规格（pi-desktop-ark）
 
-> **Module:** 204-plugin-git ｜ **Status:** Proposed ｜ **Last Updated:** 2026-10-18
+> **Module:** 204-plugin-git ｜ **Status:** Implemented (synced from hos single source; payload + device devtest present, dedicated on-device round not archived) ｜ **Last Updated:** 2026-10-29
 > **工程:** pi-desktop-ark（Pi Desktop Ark；ArkTS 宿主 + `@fellow99/node-bridge` 进程内 **Node v24** + ArkWeb；**无 Electron/Chromium**）
 > **需求编号:** 204-plugin-git ｜ **需求名称:** 插件：GIT 操作 ｜ **git 分支:** 不改动（main）
 > **单一事实源:** `pi-desktop-hos/specs/204-plugin-git/`（**功能需求与其共享，本文只记 ark 差异**）

@@ -9,10 +9,10 @@
 | --- | --- |
 | 版别 | **HarmonyOS Edition**（`pi-desktop-ark`） |
 | 应用名（桌面/窗口标签）/ 包名 | Pi Desktop Ark / `org.fellow99.pi.PiDesktopArk` |
-| 目标设备 | `2in1` / `tablet` / `phone` / `tv`（同一产物，四种形态均已声明；已在 2in1、tablet、phone 真机验证） |
+| 目标设备 | `2in1` / `tablet` / `phone` / `tv`（同一产物，四种形态均已声明；已在 2in1、tablet、phone 真机完成第 0 级验证；`tv` 未测） |
 | 后端 | `@fellow99/node-bridge` + `@fellow99/node-runtime`（均 ohpm 中心仓包）起的 Node v24.2.0（进程内，`dlopen` + `node::Start`） |
 | 前端 | ArkWeb 加载 `http://127.0.0.1:<port>/`（页面由本地服务渲染，同源零 CORS） |
-| 当前状态 | **骨架**：依赖接线与编译构建已通；载荷、鉴权、能力对齐待 Phase 1–3 |
+| 当前状态 | **第 0 级真机已过，产品链路可用**：2in1 / tablet / phone 真机完成启动编排验证；载荷、免密鉴权、9 项宿主能力桥、6 条 pi-web 补丁、jitless 裁剪链均已落地；Git 扩展（204）已随载荷（🔧 专项真机轮次未归档）。遗留：多设备矩阵、部分能力真机专项（见 [`docs/001-能力复刻评估.md`](docs/001-能力复刻评估.md) 各 E 项与父工程 [`docs/能力对照清单.md`](../docs/能力对照清单.md)） |
 | 规划文档 | [`docs/000-工程规划.md`](docs/000-工程规划.md)（v0.1，**结论以它为准**）；运行时契约见 [ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge) `docs/000-工程规划.md` §6 |
 
 ## 目录
