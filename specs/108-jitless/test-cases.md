@@ -150,7 +150,7 @@ release 包启动：
 
 > 证据来源：设备上的 Node 进程（PC 侧只用来调执行器本身，不作为任何用例的证据）。
 > 通道与命令见 [`../overall-test-cases.md`](../overall-test-cases.md) §3「设备侧用例执行通道」；原始输出见
-> [`../../logs/20261020-2/TEST_REPORT.md`](../../logs/20261020-2/TEST_REPORT.md)。
+> `../../logs/20261020-2/TEST_REPORT.md`。
 
 | 用例 | 层 | compat（`--jitless`） | jit 对照 | 设备侧原始事实 |
 |---|---|---|---|---|
@@ -168,7 +168,7 @@ release 包启动：
 > 因此"流式是否真的逐块到达""附件是否真的进模型请求""code-mode 怎么降级"都是可证伪的设备事实。
 > 图片用例须选**视觉模型**：pi 的模型目录里 `deepseek-v4-pro` 是 `input:["text"]`（纯文本，用它会如实回"看不到图"），
 > `deepseek-flash` / `deepseek-v4-flash` 才是 `input:["text","image"]`。命令与原始输出见
-> [`../../logs/20261020-2/TEST_REPORT.md`](../../logs/20261020-2/TEST_REPORT.md) §7。
+> `../../logs/20261020-2/TEST_REPORT.md` §7。
 
 ### 五、手机真机（2026-10-20，`JUY-AL80` / 华为畅享 90 / API 26）
 

@@ -71,7 +71,17 @@ pi-desktop-ark/
     ├── overall-plan.md                         # 整体技术方案（Phase/跨切面/测试/流水线）
     ├── overall-data-model.md                   # 数据模型（状态/环境/目录/权限/体积/HTTP 面）
     ├── overall-test-cases.md                   # 测试用例索引（TC-ARK-* / TC-1NN-*）
-    └── 1NN-<name>/{spec.md,plan.md[,tasks.md,test-cases.md]}  # ⬜ 模块级规格（规划 §14.2，Phase 1 起）
+    ├── 011-version-0.12.1/{spec.md,plan.md}      # 公共模块：版本更新
+    ├── 013-branding/{spec.md,plan.md}             # 公共模块：品牌化
+    ├── 101-runtime-integration-launch-orchestration/{spec.md,plan.md}
+    ├── 102-payload-pipeline-assembly-crop/{spec.md,plan.md}
+    ├── 103-arkweb-shell-render-and-pages/{spec.md,plan.md}
+    ├── 104-host-capabilities-arkts-impl/{spec.md,plan.md}
+    ├── 105-auth-loopback-and-cookie/{spec.md,plan.md}
+    ├── 106-tools-extensions-same-name-overrides/{spec.md,plan.md}
+    ├── 107-compliance-listing-checklist/{spec.md,plan.md}
+    ├── 108-jitless/{spec.md,plan.md,tasks.md,test-cases.md}
+    └── 204-plugin-git/{spec.md,plan.md,tasks.md,test-cases.md}
 ```
 
 > 说明：`entry/src/main/ets/{host,shell,panel}/` 在规划 §14.1 里写作 `{host,shell,panel}/`（✅ 同一口径），
@@ -186,13 +196,17 @@ pi-desktop-ark/
 
 | 编号 | 模块 | 主要落点目录/文件 | 现状 |
 |---|---|---|---|
-| `101-runtime-integration` | 运行时接入 | `et/app/PiDesktopRuntime.ets`、`et/common/Constants.ets`、`et/entryability/EntryAbility.ets` | ✅ 骨架（⬜ 随机端口、关停、诊断面板） |
-| `102-payload-pipeline` | 载荷流水线 | `entry/src/main/resources/resfile/pi-web/`、⬜ `scripts/`下的组装/裁剪脚本 | ⬜ 未开始 |
-| `103-arkweb-shell` | 渲染壳 | `et/pages/Index.ets`、`rawfile/boot.html`、⬜ `et/shell/` | ✅ 骨架（⬜ 围栏/清历史/错误页） |
-| `104-host-capabilities` | 宿主能力 | ⬜ `et/host/`（`HostBridge` 的 ArkTS 实现） | ⬜ 未开始 |
-| `105-auth` | 鉴权 | ⬜ `et/shell/`（Cookie 注入）＋ Node 侧启动脚本（密码派生） | ⬜ 未开始（路线选型 = 规划 §6.2 ①） |
-| `106-tools-extensions` | 工具扩展 | ⬜ 载荷内 `pi-agent/extensions/`（`bash`/`find`/`grep` 同名顶替 + 工作区主目录） | ⬜ 未开始（复用旧壳资产） |
-| `107-compliance` | 合规 | `AppScope/app.json5`、`module.json5`、⬜ 许可清单与材料 | ⬜ Phase 3 |
+| `011-version` | 版本更新 | `AppScope/app.json5`、`oh-package.json5`、`patches/v0.12.1/` | ✅ 上游 v1.2.0/v0.12.1；应用 0.1.0/100 |
+| `013-branding` | 品牌化 | `scripts/brand-assets.mjs`、`scripts/assemble-payload.mjs`、`payload/env.js` | ⚠️ 图标/文案完成；页面 Logo 与应用名统一 ⬜ |
+| `101-runtime-integration` | 运行时接入 | `et/app/PiDesktopRuntime.ets`、`et/common/Constants.ets`、`et/entryability/EntryAbility.ets` | ✅ 第 0 级真机（2in1/平板/手机） |
+| `102-payload-pipeline` | 载荷流水线 | `scripts/assemble-payload.mjs`、`scripts/crop-rules.mjs`、`entry/.../resfile/pi-web/` | ✅ 组装/裁剪/投放 |
+| `103-arkweb-shell` | 渲染壳 | `et/pages/Index.ets`、`rawfile/boot.html` | ✅ 渲染/围栏/清历史/错误页 |
+| `104-host-capabilities` | 宿主能力 | `et/host/HostCapabilities.ets` | ✅ 9 项能力注册（PTY 为 unsupported） |
+| `105-auth` | 鉴权 | `payload/env.js`、`et/app/PiDesktopRuntime.ets` | ✅ loopback 免密路线 |
+| `106-tools-extensions` | 工具扩展 | `payload/extensions/`（`bash`/`find`/`grep` 同名顶替） | ✅ 随载荷装配 + 真机 |
+| `107-compliance` | 合规 | `AppScope/app.json5`、`module.json5`、`docs/ACL配置.md` | ⚠️ 清单部分收口；权限面待收窄 |
+| `108-jitless` | 形态 | `et/common/BuildConfig.ets`、`payload/jitless/` | ✅ `compat`（`--jitless`） |
+| `204-plugin-git` | Git 插件 | `payload/extensions/harmony-git/` | 🔧 随载荷；专项真机未归档 |
 
 ---
 

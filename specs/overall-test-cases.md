@@ -58,7 +58,7 @@
 | `TC-ARK-011` | 会话跨重启存活 | L2 | 102/103 | 强杀 → 重启 → 会话列表含该会话且末条消息一致 | 截图 + `pi-agent/sessions/**/*.jsonl` | ⬜ 未执行（需先有真实会话） |
 | `TC-ARK-012` | AI 生成内容标识 | L2/L4 | 107 | 主界面两次截图均可辨认标识文本 | `snapshot_display` ×2 | ⬜ 未执行 |
 | `TC-ARK-013` | 三语资源一致性 | L0/L4 | 107 | `base`/`zh_CN`/`en_US` 的 `string.json` 键集合一致 | 键集合 diff | ⚠️ 现状：`base` 9 键 vs `zh_CN`/`en_US` 8 键（`base` 多出 `module_desc`/`EntryAbility_*` 一类；已记录，未修） |
-| `TC-ARK-014` | 回归四件套 | L0–L4 | 全部 | ① 产物 SHA-256 ② 首启耗时 ③ 包体+压缩方式 ④ JIT/WASM 档位：与上次基线逐项对照无恶化 | [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) | ⚠️ 三项已存档（①②③），第 ④ 项口径迁移中 |
+| `TC-ARK-014` | 回归四件套 | L0–L4 | 全部 | ① 产物 SHA-256 ② 首启耗时 ③ 包体+压缩方式 ④ JIT/WASM 档位：与上次基线逐项对照无恶化 | `../logs/20261020-1/TEST_REPORT.md` | ⚠️ 三项已存档（①②③），第 ④ 项口径迁移中 |
 
 ### 2.2 `101` 运行时接入
 
@@ -204,7 +204,7 @@ hdc shell "aa force-stop org.fellow99.pi.PiDesktopArk"
 hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility"   # 形态由编译期常量决定（默认 compat）
 ```
 
-**取证纪律**：每轮必须同时留「原始输出」+「复现命令」；证据落 [`../logs/<YYYYMMDD>-N/`](../logs/)；
+**取证纪律**：每轮必须同时留「原始输出」+「复现命令」；证据落 `../logs/<YYYYMMDD>-N/`；
 沙箱内文件 `hdc` 只读（debug 签名也不行）⇒ 涉及运行期写入的结论只能从应用域或 HTTP 端点取。
 
 ### 3.1 设备侧用例执行通道（**纯 JS 断言必须在设备上跑**，2026-10-20 第 2 轮起）
@@ -315,8 +315,8 @@ stream 从不发 `end`/`close` ⇒ 完成信号用 `beforeExit`、计数按事�
 |---|---|---|---|
 | 2026-10-16 | 基线首轮（HAD-W24） | 建立 B1–B12 | `docs/000-工程规划.md` §10 附录 |
 | 2026-10-17 / 10-19 | 权限面收窄、压缩开关、零 ACL 评估 | 见 `docs/001-能力复刻评估.md` REV-5/6/7 + `docs/ACL-无ACL评估.md` | 同上 |
-| **2026-10-20** | **全模块一轮**：L0 门禁 + 108 PC 双形态单测（38×2）+ 204 单测（25）+ 204 远端双仓端到端 + 真实模型调用（compat）+ 真机 compat/jit 验收 | 见 [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) | `logs/20261020-1/` |
-| **2026-10-20 手机真机部署** | `deviceTypes` 扩为 2in1/tablet/**phone**/**tv**；华为畅享 90（JUY-AL80）装机成功、`auto`→compat 就绪 1,616 ms、路由全 200、ArkWeb 渲染进程与载荷端口 ESTABLISHED；发现并修掉「`auto` 以权限位判 jit ⇒ 手机 SIGTRAP 必崩」的缺陷 | 见 [`../logs/20261020-3/PHONE_REPORT.md`](../logs/20261020-3/PHONE_REPORT.md) | `logs/20261020-3/` |
-| **2026-10-20 第 2 轮（续）** | 设备侧真实会话：配置 DeepSeek Key + 建工作区 + 对话（SSE 逐块，compat/jit 各一轮）+ 图片附件（视觉模型 `deepseek-flash`：两张真实 PNG 描述互异、含中英文识读）+ code-mode 降级（compat `unavailable` 带结构化原因 / jit `available`） | 见 [`../logs/20261020-2/TEST_REPORT.md`](../logs/20261020-2/TEST_REPORT.md) §7 | `logs/20261020-2/` |
-| **2026-10-20 第 2 轮** | **全部用例改在真机执行**：新增设备侧执行通道（`piTestScript`/`piTestSuite`/`piTestEnvFile` + `hdc rport`）；108 双形态 14/14×2、photon 22+2×2、204 单元 26/0×2、204 端到端 22/5（远端受设备网络限制）、真实模型调用 2/2×2 | 见 [`../logs/20261020-2/TEST_REPORT.md`](../logs/20261020-2/TEST_REPORT.md) | `logs/20261020-2/` |
-| **2026-10-20（修复轮复验）** | 缺陷 D1–D3 修复后重装 `29ab4aca52e4` 载荷的 HAP：compat 就绪 **911 ms**、`/` `/api/web-auth` `/api/sessions` 均 **200**，设备侧扩展文件已含修复；jit 就绪 **871 ms**、`兼容层 active=false`、`WebAssembly=object` | [`../logs/20261020-1/TEST_REPORT.md`](../logs/20261020-1/TEST_REPORT.md) §康复验 | 同上 |
+| **2026-10-20** | **全模块一轮**：L0 门禁 + 108 PC 双形态单测（38×2）+ 204 单测（25）+ 204 远端双仓端到端 + 真实模型调用（compat）+ 真机 compat/jit 验收 | 见 `../logs/20261020-1/TEST_REPORT.md` | `logs/20261020-1/` |
+| **2026-10-20 手机真机部署** | `deviceTypes` 扩为 2in1/tablet/**phone**/**tv**；华为畅享 90（JUY-AL80）装机成功、`auto`→compat 就绪 1,616 ms、路由全 200、ArkWeb 渲染进程与载荷端口 ESTABLISHED；发现并修掉「`auto` 以权限位判 jit ⇒ 手机 SIGTRAP 必崩」的缺陷 | 见 `../logs/20261020-3/PHONE_REPORT.md` | `logs/20261020-3/` |
+| **2026-10-20 第 2 轮（续）** | 设备侧真实会话：配置 DeepSeek Key + 建工作区 + 对话（SSE 逐块，compat/jit 各一轮）+ 图片附件（视觉模型 `deepseek-flash`：两张真实 PNG 描述互异、含中英文识读）+ code-mode 降级（compat `unavailable` 带结构化原因 / jit `available`） | 见 `../logs/20261020-2/TEST_REPORT.md` §7 | `logs/20261020-2/` |
+| **2026-10-20 第 2 轮** | **全部用例改在真机执行**：新增设备侧执行通道（`piTestScript`/`piTestSuite`/`piTestEnvFile` + `hdc rport`）；108 双形态 14/14×2、photon 22+2×2、204 单元 26/0×2、204 端到端 22/5（远端受设备网络限制）、真实模型调用 2/2×2 | 见 `../logs/20261020-2/TEST_REPORT.md` | `logs/20261020-2/` |
+| **2026-10-20（修复轮复验）** | 缺陷 D1–D3 修复后重装 `29ab4aca52e4` 载荷的 HAP：compat 就绪 **911 ms**、`/` `/api/web-auth` `/api/sessions` 均 **200**，设备侧扩展文件已含修复；jit 就绪 **871 ms**、`兼容层 active=false`、`WebAssembly=object` | `../logs/20261020-1/TEST_REPORT.md` §康复验 | 同上 |

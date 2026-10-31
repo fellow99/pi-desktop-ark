@@ -50,7 +50,7 @@
 
 2026-10-20 第 2 轮起，本模块的**普通与端到端用例一律在真机上执行**（设备上的 Node 进程，
 两形态各一遍）；PC 侧只用于调执行器本身。通道、命令与原始输出见
-[`../overall-test-cases.md`](../overall-test-cases.md) §3 与 [`../../logs/20261020-2/TEST_REPORT.md`](../../logs/20261020-2/TEST_REPORT.md)。
+[`../overall-test-cases.md`](../overall-test-cases.md) §3 与 `../../logs/20261020-2/TEST_REPORT.md`。
 远端仓库用例的设备侧结论受**设备网络拓扑**限制（探针实测：`github.com` 超时、内网域名 DNS 不存在），
 不记为代码缺陷。
 

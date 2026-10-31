@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * brand-assets.mjs — 品牌化物料生成（需求 `103-branding` / 行动项 §K.9 E11）
+ * brand-assets.mjs — 品牌化物料生成（需求 `013-branding` / 行动项 §K.9 E11）
  *
  * ## 为什么需要它
  *
