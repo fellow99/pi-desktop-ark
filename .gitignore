@@ -46,3 +46,8 @@ entry/src/main/resources/resfile/devtest/
 
 # 阶段日志与证据（构建日志、截图、报告）— 入库策略同 desktop，不入库
 /logs/
+
+
+# 工具索引（本地，不入库）—— AI 代码地图 / 设备驱动 / 浏览器驱动
+.codegraph
+.playwright-mcp
