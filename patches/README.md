@@ -5,7 +5,15 @@
 > （应用 → 反向 → 受影响文件 SHA-256 逐条还原）· 按**被 patch 的上游 tag** 建目录 ·
 > 只在**独立 detached worktree** 里生成 · 每条登记「触发条件 / 实施时机 / 替代方案」。
 
-目录名 = 被 patch 的那一侧的上游 tag（当前 **`v0.12.1`**，即 `pi-web` `f83b1a5`）。
+> **现状（2026-11-02）**：**6 条**补丁，`patches/v0.11.1/` `v0.12.1/` `v0.13.0/` 保留可追溯，当前目录 **`patches/v0.14.1/`**（被 patch 的上游 `pi-web` tag `v0.14.1` `506168b`）。
+> **v0.14.1 重出记录**：上游 **#1462** 在 `components/DirectoryPicker.tsx` 新增 backdrop 按下追踪
+> （`backdropPressRef`/`createBackdropPressRef`）并把 `canSelect` 并入 `!loading`、移除 `canCreate`，
+> 致 `0005-directory-picker-contract` 与 `0006-directory-picker-permission-flow` **上下文漂移**；
+> 已在独立 detached worktree 上**重出**（**保留** #1462 修复语义，在其上重放主目录 Tab 契约 / 权限流），
+> `0001/0002/0003/0004` 为 `v0.13.0/` 同内容拷贝。全栈在 pristine v0.14.1 上按序 `git apply` 全 PASS、
+> 反向往返回 pristine 全 PASS；`assemble-payload.mjs` `PI_WEB_PATCH_TAG=v0.14.1`。
+
+目录名 = 被 patch 的那一侧的上游 tag（当前 **`v0.14.1`**，即 `pi-web` `506168b`）。
 上游升级时**新建目录**、旧目录保留可追溯，并同步
 `scripts/assemble-payload.mjs` 的 `PI_WEB_PATCH_TAG`。
 
