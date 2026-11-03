@@ -8,9 +8,9 @@
 
 | 项 | 内容 | 与 hos 的关系 |
 | --- | --- | --- |
-| `requestPermissions` | **21 项**：`web_engine` 的 23 项 + `KEEP_BACKGROUND_RUNNING`，**已撤销 3 项**（`READ_PASTEBOARD`、`READ_WRITE_DESKTOP_DIRECTORY`、`FILE_ACCESS_PERSIST`）；**保留** `READ_WRITE_{DOCUMENTS,DOWNLOAD}_DIRECTORY`（normal 级、无 ACL，点 Tab 时授权）⇒ **四机实测见 §5** | ✅ 基线逐项一致，撤销/保留项均有依据 |
+| `requestPermissions` | **20 项**（2026-11-03 收窄）：`web_engine` 基线 + `KEEP_BACKGROUND_RUNNING`；已撤销 `READ_PASTEBOARD`/`READ_WRITE_DESKTOP_DIRECTORY`/`FILE_ACCESS_PERSIST`/`kernel.ALLOW_WRITABLE_CODE_MEMORY`；保留 `READ_WRITE_{DOCUMENTS,DOWNLOAD}_DIRECTORY`（normal 级、无 ACL，点 Tab 时授权）；**现役 ACL 0 项**（运行形态 = `NODE_MODE:compat` --jitless，对齐 dsh-desktop-ark） | ✅ 声明面与 dsh-desktop-ark 逐项一致 |
 | 其中带 `reason` + `usedScene` | **6 项**（`EntryAbility` / `inuse`） | ✅ 文案取自 `web_engine/src/main/resources/{base,zh_CN,en_US}`，**逐字节一致** |
-| `definePermissions` | `LOCK_WINDOW_CURSOR`、`kernel.ALLOW_WRITABLE_CODE_MEMORY` | ✅ 一致（受限权限两处成对出现） |
+| `definePermissions` | `LOCK_WINDOW_CURSOR`（2026-11-03 已移除 `kernel.ALLOW_WRITABLE_CODE_MEMORY`，与 compat/jitless 形态对齐） | ✅ 与 dsh-desktop-ark 一致 |
 | Ability 后台模式 | `EntryAbility.backgroundModes = ["taskKeeping"]` | ✅ 与 `electron` 模块一致 |
 
 ### 1.0 「预申请但应用侧未接线」权限盘点（2026-10-29 源码核实）
@@ -33,14 +33,12 @@
 > 注：这些是**声明面冗余**，不影响运行（compat 形态只依赖 INTERNET / GET_NETWORK_INFO / 内核三件与
 > `KEEP_BACKGROUND_RUNNING`、文档/下载两个 user_grant）。合规清单（spec 107）下一轮应把「预申请未上线」逐项标注。
 
-### 1.1 ACL（受限权限，需按本包名申请）：现役 **1 项**
+### 1.1 ACL（受限权限，需按本包名申请）：现役 **0 项**
 
-| # | 权限 | 用途 | 判定 |
-| --- | --- | --- | --- |
-| 1 | `ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY` | 进程内 Node/V8 的 JIT（**无它 V8 走 JIT 即 SIGTRAP**，属应用级失败） | `system_basic` + `provisionEnable=true` ⇒ 需 ACL |
-
-> 探针实测（`ohos-node-bridge/docs/000-工程规划.md` §D.8）：声明 `kernel.EXEMPT_ANONYMOUS_EXECUTABLE_MEMORY`
-> 等**开放权限不能替代**第 1 项 —— 仍 SIGTRAP。故第 1 项是刚性前置。
+> 2026-11-03 变更：运行形态改为 **`NODE_MODE=compat`（--jitless，见 `common/BuildConfig.ets`）**，
+> 不再需要 `kernel.ALLOW_WRITABLE_CODE_MEMORY`（jitless 不需要可写/可执行内存权限），已从声明面移除，
+> **对齐 dsh-desktop-ark**（其可正常签名，Profile allowed-acls 只需 `READ_WRITE_{DOCUMENTS,DOWNLOAD}_DIRECTORY` 两项，见签名材料）。
+> 代价：V8 走 `--jitless`（7–10× 慢，功能完整、code-mode 不可用），实测依据见 `docs/ACL-无ACL评估.md`。
 
 **2026-10-19 撤销三项 / 保留两项**（取证：`docs/001-能力复刻评估.md` REV-5·REV-6·REV-7；零 ACL 评估：`docs/ACL-无ACL评估.md`）：
 
