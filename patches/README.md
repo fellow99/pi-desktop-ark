@@ -5,7 +5,7 @@
 > （应用 → 反向 → 受影响文件 SHA-256 逐条还原）· 按**被 patch 的上游 tag** 建目录 ·
 > 只在**独立 detached worktree** 里生成 · 每条登记「触发条件 / 实施时机 / 替代方案」。
 
-> **现状（2026-11-04）**：**6 条**补丁，`patches/v0.11.1/` `v0.12.1/` `v0.13.0/` `v0.14.1/` 保留可追溯，当前目录 **`patches/v0.14.2/`**（被 patch 的上游 `pi-web` tag `v0.14.2` `025e24e`）。
+> **现状（2026-11-05）**：**6 条**补丁，`patches/v0.11.1/` `v0.12.1/` `v0.13.0/` `v0.14.1/` `v0.14.2/` 保留可追溯，当前目录 **`patches/v0.15.0/`**（被 patch 的上游 `pi-web` tag `v0.15.0` `f130910`）。
 > **v0.14.1 重出记录**：上游 **#1462** 在 `components/DirectoryPicker.tsx` 新增 backdrop 按下追踪
 > （`backdropPressRef`/`createBackdropPressRef`）并把 `canSelect` 并入 `!loading`、移除 `canCreate`，
 > 致 `0005-directory-picker-contract` 与 `0006-directory-picker-permission-flow` **上下文漂移**；
@@ -13,8 +13,9 @@
 > `0001/0002/0003/0004` 为 `v0.13.0/` 同内容拷贝。全栈在 pristine v0.14.1 上按序 `git apply` 全 PASS、
 > 反向往返回 pristine 全 PASS；`assemble-payload.mjs` `PI_WEB_PATCH_TAG=v0.14.1`。
 > **v0.14.2（2026-11-04）**：补丁领域 6 个文件在 v0.14.1→v0.14.2 均无变更 ⇒ `patches/v0.14.1/` 六条直接拷贝为 `patches/v0.14.2/`（逐字节相同），零漂移；已在本轮 pristine v0.14.2 上按序应用 + 反向往返回 pristine PASS；`assemble-payload.mjs` `PI_WEB_PATCH_TAG=v0.14.2`。
+> **v0.15.0（2026-11-05）**：上游唯一补丁领域交集是 session-export（`1fbf6c6` 删除被 pi 1.5.0 迭代模板废弃的 `patchExportHtml()`），与本工程 `0004-session-export-runtime-identity-guard` 的 `exportSession()` 改动区域**不重叠** ⇒ `patches/v0.14.2/` 六条直接拷贝为 `patches/v0.15.0/`（逐字节相同）；已在 pristine v0.15.0 上按序累计 dry-run 全绿（14/14，含 hos/android 集合）；`assemble-payload.mjs` `PI_WEB_PATCH_TAG=v0.15.0`。
 
-目录名 = 被 patch 的那一侧的上游 tag（当前 **`v0.14.2`**，即 `pi-web` `025e24e`）。
+目录名 = 被 patch 的那一侧的上游 tag（当前 **`v0.15.0`**，即 `pi-web` `f130910`）。
 上游升级时**新建目录**、旧目录保留可追溯，并同步
 `scripts/assemble-payload.mjs` 的 `PI_WEB_PATCH_TAG`。
 

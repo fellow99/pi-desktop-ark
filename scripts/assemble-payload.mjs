@@ -598,7 +598,7 @@ async function sha256File(filePath) {
  * 的顺序自己把这件事做完，并在打包前用**标记串**断言产物真的换了，否则 exit 2：
  * 组装结果因此不再依赖「某个人记得在本地先 apply」，也不会静默产出旧载荷。
  */
-const PI_WEB_PATCH_TAG = 'v0.14.2';
+const PI_WEB_PATCH_TAG = 'v0.15.0';
 /** 被 patch 的上游工作树（与 prepare-next.mjs 同一个：`../pi-web`） */
 const DEFAULT_PI_WEB = path.resolve(PROJECT_ROOT, '..', 'pi-web');
 /** 补丁目录：按**被 patch 的上游 tag** 命名，与 pi-desktop-hos/patches/ 同构 */
