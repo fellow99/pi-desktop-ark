@@ -172,7 +172,7 @@ function usage() {
     '  --keep-staging    路线 ②：保留暂存目录（默认打完包就删）',
     '  --bridge <dir>    库载荷三件目录（默认 vendor/node-bridge-payload/）；随包投放（resfile + 归档内各一份）',
     '  --pi-web <dir>    被 patch 的上游工作树（默认 ../pi-web；其 HEAD 必须正好是 --patch-tag 那个 tag）',
-    '  --patch-dir <dir> 上游补丁目录（默认 patches/v0.14.1/，按被 patch 的上游 tag 命名）',
+    '  --patch-dir <dir> 上游补丁目录（默认 patches/v0.15.0/，按被 patch 的上游 tag 命名）',
     '  --pi-web-node <p> 重新编译 pi-web 用的 node（默认当前 node；必须与装 node_modules 的那个一致）',
     '  --skip-patches    不应用上游补丁（诊断用；载荷因此带着未打补丁的语义）',
     '  --keep-patches    跑完不还原 pi-web（默认还原成 pristine）',
