@@ -241,11 +241,12 @@ export class HostCapabilities {
    */
   private static attribution(permission: string): string {
     if (permission === 'ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY') {
-      return '「下载」目录读写：本版**已撤掉该声明**（user_grant，但撤销后即可零弹窗）'
-        + ' ⇒ 下载目录不再作为工作区根；外部文件请用 fs.pickFolder 选择器（URI、仅本会话）';
+      return '「下载」目录读写：normal 级 user_grant 权限（随安装声明，无需 ACL）'
+        + ' ⇒ 在「选择工作区目录」对话框切到「下载」Tab，点「请求权限」弹系统授权窗，授予后即可浏览并作为工作区根';
     }
     if (permission === 'ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY') {
-      return '「文档」目录读写：本版**已撤掉该声明**（同上）⇒ 文档目录不再作为工作区根';
+      return '「文档」目录读写：normal 级 user_grant 权限（随安装声明，无需 ACL）'
+        + ' ⇒ 在「选择工作区目录」对话框切到「文档」Tab，点「请求权限」弹系统授权窗，授予后即可浏览并作为工作区根';
     }
     if (permission === 'ohos.permission.READ_WRITE_DESKTOP_DIRECTORY') {
       return '「桌面」目录读写：本版**已撤掉该声明**（system_basic + 必须 ACL，普通应用弹窗无效）'
@@ -265,20 +266,23 @@ export class HostCapabilities {
    * 权限 → **下一步动作**（E19）。`granted` 时返回 `none`。
    *
    * 判定依据是「能不能靠用户点一下就解决」：
-   *   · user_grant（文档 / 下载 / 持久化授权）⇒ 先 `perm.request` 弹窗，被拒后 `perm.openAppInfo`；
-   *   · 已撤掉声明的权限（桌面 / 文档 / 下载 / 持久化 / 剪贴板）⇒ 没有下一步，如实回 `none`
+   *   · user_grant（文档 / 下载，module.json5 已重新声明）⇒ 先 `perm.request` 弹窗，被拒后 `perm.openAppInfo`；
+   *   · 已撤掉声明的权限（桌面 / 持久化 / 剪贴板）⇒ 没有下一步，如实回 `none`
    *     （别把用户引到注定失败的弹窗上）。
    */
   private static nextStep(permission: string, granted: boolean): string {
     if (granted) {
       return 'none';
     }
+    if (permission === 'ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY'
+      || permission === 'ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY') {
+      // 文档 / 下载已重新声明（module.json5 requestPermissions，normal 级 user_grant）：未授权时引导「请求权限」。
+      return 'perm.request';
+    }
     if (permission === 'ohos.permission.READ_WRITE_DESKTOP_DIRECTORY'
-      || permission === 'ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY'
-      || permission === 'ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY'
       || permission === 'ohos.permission.FILE_ACCESS_PERSIST'
       || permission === 'ohos.permission.READ_PASTEBOARD') {
-      // 本版未声明这些权限（用户目录 / 持久化 / 剪贴板）：任何引导都不会生效。
+      // 本版未声明这些权限（桌面 system_basic / 持久化 / 剪贴板）：任何引导都不会生效。
       return 'none';
     }
     return 'perm.request';

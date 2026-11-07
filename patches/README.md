@@ -5,7 +5,7 @@
 > （应用 → 反向 → 受影响文件 SHA-256 逐条还原）· 按**被 patch 的上游 tag** 建目录 ·
 > 只在**独立 detached worktree** 里生成 · 每条登记「触发条件 / 实施时机 / 替代方案」。
 
-> **现状（2026-11-05）**：**6 条**补丁，`patches/v0.11.1/` `v0.12.1/` `v0.13.0/` `v0.14.1/` `v0.14.2/` 保留可追溯，当前目录 **`patches/v0.15.0/`**（被 patch 的上游 `pi-web` tag `v0.15.0` `f130910`）。
+> **现状（2026-11-07）**：**7 条**补丁，`patches/v0.11.1/` `v0.12.1/` `v0.13.0/` `v0.14.1/` `v0.14.2/` 保留可追溯，当前目录 **`patches/v0.15.0/`**（被 patch 的上游 `pi-web` tag `v0.15.0` `f130910`）。
 > **v0.14.1 重出记录**：上游 **#1462** 在 `components/DirectoryPicker.tsx` 新增 backdrop 按下追踪
 > （`backdropPressRef`/`createBackdropPressRef`）并把 `canSelect` 并入 `!loading`、移除 `canCreate`，
 > 致 `0005-directory-picker-contract` 与 `0006-directory-picker-permission-flow` **上下文漂移**；
@@ -69,6 +69,21 @@
 | 语义 | 以 `HOME`（= `context.filesDir`）为锚做**纯字符串重写**：幂等（el2 形态不再匹配）、可逆（不写盘、不缓存，响应回显 el2 形态）、不猜测（`HOME` 不是 el2 形态则原样返回）。400 仍在，并带 `hint`（`received=… expected=… normalized=el2-alias`）。 |
 | 生成方式 / 回退方式 | 同上（`--reverse patches/v0.12.1/0003-cwd-hdc-path-alias-normalize.patch`） |
 | 规格 | `docs/已知坑-cwd与沙箱路径.md` §2 |
+
+### `FENCE-1` — 目录选择器移除手输路径入口，闭合根围栏（FR-203-007）
+
+| 项 | 内容 |
+|---|---|
+| 文件 | `patches/v0.15.0/0007-directory-picker-root-fence.patch`（只含 `components/DirectoryPicker.tsx`） |
+| 全局编号 | `FENCE-1`（只增不改、不复用；安全属性补丁，挂需求 203） |
+| 被 patch 的上游 | `pi-web` tag **`v0.15.0`**（`f130910`），**在 `0006` 之后**（基线 = 0006 应用后的 `DirectoryPicker.tsx`） |
+| 触及文件（1） | `components/DirectoryPicker.tsx`：移除 `pathInput` state、`handlePathSubmit`、路径表单 + Go 按钮；`canSelect` 简化；标题栏改为返回按钮 + 只读当前路径，保留「返回上级」 |
+| **触发条件** | 0005/0006 的「主目录 Tab + 授权门」已上线，但 **`pathInput` 表单仍可用**：用户可键入任意绝对路径（如 `/`）沿 `?path=` 浏览越出根围栏；而本模块代码注释与 hos 规范（FR-203-007）都宣称「无手动路径输入」—— 代码与声明的安全属性不一致。 |
+| **实施时机** | 评审修复（2026-11-07，需求 203 轮）；由 `scripts/assemble-payload.mjs` 载荷组装期幂等应用（`0007` 排最后）。 |
+| **替代方案** | ① 就地禁用 input（`disabled`）仍会渲染输入框（误导）；② 只藏 Go 按钮、留回车提交（仍有提交点）；③ 在路由层拒绝任意 `path`（会破坏 pi-web 其它合法用法，也仍留下表单残留）。移除表单是最小且语义一致的闭合。 |
+| 往返校验 | pristine v0.15.0 按序 0001…0007 全 PASS；0006 态上正向 → `--reverse --check` 命中（幂等）→ 反向 → 与 0006 态字节一致。 |
+| 版本回填 | `v0.14.1/` `v0.14.2/` 的 `DirectoryPicker.tsx` 基座与 v0.15.0 逐字节相同 ⇒ 0007 逐字节拷贝回填；`v0.12.1/` `v0.13.0/` 基座不同（旧式 `canCreate` / 无 `backdropPressRef`），**未回填**（历史 tag 不再构建）。 |
+| 规格 | `specs/203-plugin-workspace-picker/` |
 
 ## 1. 构建脚本如何消费本目录（已实现，2026-10-17）
 
