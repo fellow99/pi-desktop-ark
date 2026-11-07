@@ -23,9 +23,9 @@
 | 模块 | 运行时与载荷（`101`–`102`） | 4 | 运行时接入与启动编排 · 载荷流水线 |
 | 模块 | 渲染与能力（`103`–`104`） | 4 | 渲染壳（ArkWeb） · 宿主能力（ArkTS） |
 | 模块 | 鉴权、扩展与合规（`105`–`107`） | 6 | 鉴权（loopback/Cookie） · 工具扩展 · 合规清单 |
-| 模块 | 形态与插件（`108` / `204`） | 6 | JITless 形态 · Git 插件 |
+| 模块 | 形态与插件（`108` / `203` / `204`） | 9 | JITless 形态 · 目录选择器 · Git 插件 |
 | 索引 | 本索引 | 1 | `README.md` |
-| **合计** | **12 目录 / 36 文件** | | `specs/` 自身 1 + 模块目录 11 = **12 目录**；项目级 9 + 索引 1 + 模块 26 = **36 个 `.md` 文件** |
+| **合计** | **13 目录 / 39 文件** | | `specs/` 自身 1 + 模块目录 12 = **13 目录**；项目级 9 + 索引 1 + 模块 29 = **39 个 `.md` 文件** |
 
 > **刻意不生成** `API.md` 与 `overall-api.md`：数据面由上游 `pi-web` 提供，本工程不自有 API。
 > 能力面是库冻结的 `HostBridge` 能力名（见 [`overall-data-model.md`](./overall-data-model.md) §1.3 与
@@ -167,7 +167,18 @@
 
 ---
 
-## 七、插件模块（`204`）
+## 七、插件模块（`203` / `204`）
+
+### 203 — 插件：选择工作区目录（plugin-workspace-picker）
+
+> 三主目录（沙箱 / 文档 / 下载）+ 授权门（Tab 只查 → 未授权显示「请求权限 / 刷新」）；
+> 宿主 `perm.*` 桥 + 上游补丁 0002/0005/0006/0007；本轮已实现并补充规格，真机验收 ⬜ 待补。
+
+| 文档 | 链接 | 说明 |
+|---|---|---|
+| 功能规格 | [203-plugin-workspace-picker/spec.md](./203-plugin-workspace-picker/spec.md) | `FR-ARK-203-*`（三根 + 授权门 + 围栏） |
+| 技术方案 | [203-plugin-workspace-picker/plan.md](./203-plugin-workspace-picker/plan.md) | 落地清单 + 评审发现 + 补丁纪律 |
+| 测试用例 | [203-plugin-workspace-picker/test-cases.md](./203-plugin-workspace-picker/test-cases.md) | 离线核对（已过）+ 真机用例（⬜ 待补） |
 
 ### 204 — 插件：Git 操作（plugin-git）
 
@@ -225,5 +236,5 @@
 | 构建 / 发布 | [011-version-0.12.1](./011-version-0.12.1/) → [102-payload-pipeline-assembly-crop](./102-payload-pipeline-assembly-crop/) → [108-jitless](./108-jitless/) |
 | 平台能力 | 104 → 105 → 106 → 107 |
 | 品牌 / 合规 | [013-branding](./013-branding/) → 107 |
-| 插件 | 204 → 106 |
+| 插件 | 203 → 204 → 106 |
 | 真机 / 证据 | [overall-test-cases.md](./overall-test-cases.md) → `../docs/001-能力复刻评估.md` |
