@@ -250,9 +250,15 @@ struct Index {
       return true;
     }
     if (this.status === UIState.READY) {
-      // ⑧：主动拦下返回键。放行会让 ArkWeb 回到已被 clearHistory 清除的 boot 页（或退出应用），
-      // 而**主界面就是本应用的功能本体**，退出应走系统手势/关闭按钮。
-      Log.info('返回键已拦截（主界面由本地服务提供，不放行以免回到 boot 页）');
+      // ⑧ + 113-system-back：主界面仍**拦截**返回键（返 true，不放行回到 boot/退出）——
+      // 首页/会话页/无浮层的 no-op 由该拦截保证；同时把返回键派发给 Web（`pi-back` 事件，
+      // 协议名与 android/hos 一致），由 AppShell 补丁按优先级关闭设置页、收回移动端抽屉。
+      try {
+        this.controller.runJavaScript("window.dispatchEvent(new Event('pi-back'))")
+          .catch((e: Object) => { Log.warn('pi-back 派发失败（页面未就绪？）：' + JSON.stringify(e)); });
+      } catch (e) {
+        Log.warn('pi-back 派发异常：' + JSON.stringify(e));
+      }
       return true;
     }
     return false;
