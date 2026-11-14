@@ -1,11 +1,24 @@
 # 013 — 品牌化（branding）功能规格
 
-> **Module:** branding ｜ **Status:** Partial（图标与文案已完成；页面 Logo 与统一命名待收口） ｜ **Last Updated:** 2026-10-31
+> **Module:** branding ｜ **Status:** Partial（图标与文案已完成；页面 Logo 与统一命名待收口） ｜ **Last Updated:** 2026-11-14（R2）
 > **上游基线:** `pi` v1.2.0 / `pi-web` v0.12.1（品牌化实施轮次为 2026-10-17）
-> **应用名 / 包名:** **Pi Desktop Ark** / `org.fellow99.pi.PiDesktopArk`
+> **应用名 / 包名:** **Pi Desktop Ark** / `top.fellow99.pi.PiDesktopArk`（R2 由 `org.fellow99.pi.PiDesktopArk` 变更，见 §R2）
+> **需求编号:** `013-branding-r2` ｜ **日期:** 2026-11-14
 > **物料唯一来源:** 父工程 `../assets/`（`logo.svg`、`logo.png`、`logo-1024-with-bg.png`）
 > **规划依据:** [`../../docs/001-能力复刻评估.md`](../../docs/001-能力复刻评估.md) §H.3、E11/E13、REV-2/REV-12；[`../../docs/000-工程规划.md`](../../docs/000-工程规划.md) 头部表
 > **同型参考:** `pi-desktop` / `pi-desktop-hos` / `pi-desktop-android` 的 `013-branding`
+
+## R2 — 包名变更（013-branding-r2）
+
+> **需求编号:** `013-branding-r2` ｜ **需求名称:** 包名修改 ｜ **Git 分支:** 不改动
+
+bundleName 由 `org.fellow99.pi.PiDesktopArk` 改为 **`top.fellow99.pi.PiDesktopArk`**：
+
+- 仅变更 `AppScope/app.json5` 的 `bundleName`；Ark 源码/配置内无其他 bundleName 硬编码引用。
+- 版本号 / versionCode 不变。
+- 编译构建验证通过后回写本规格。
+
+---
 
 ## 1. 模块概述
 

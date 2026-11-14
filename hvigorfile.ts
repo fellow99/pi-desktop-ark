@@ -10,7 +10,7 @@ import * as path from 'path';
  *   ① 环境变量 CERTPATH / STORE_FILE / PROFILE / KEY_ALIAS / KEY_PASSWORD / STORE_PASSWORD / SIGN_ALG（CI 用）
  *   ② signing.<SIGN_MODE>.local.json（本地、gitignored）
  * 两者都没有 ⇒ **产出未签名包**（不报错），要装机时在 DevEco 为
- * `org.fellow99.pi.PiDesktopArk` 生成调试签名后填入 ②。
+ * `top.fellow99.pi.PiDesktopArk` 生成调试签名后填入 ②。
  */
 const PROJECT_ROOT = __dirname;
 
@@ -109,7 +109,7 @@ getNode(__filename).afterNodeEvaluate((node) => {
       console.warn(
         `[hvigorfile] SIGN_MODE=${mode}：既没有 ${path.join(PROJECT_ROOT, `signing.${mode}.local.json`)}（与环境变量），` +
         `build-profile.json5 里也没有 signingConfigs —— 本次构建**产出未签名包**。` +
-        `（在 DevEco 里为 org.fellow99.pi.PiDesktopArk「自动生成签名」，或填写 signing.${mode}.local.json）`
+        `（在 DevEco 里为 top.fellow99.pi.PiDesktopArk「自动生成签名」，或填写 signing.${mode}.local.json）`
       );
     } else {
       // DevEco 只写了 signingConfigs、没把 product 指过去时**补上指针**：

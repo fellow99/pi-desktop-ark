@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "org.fellow99.pi.PiDesktopArk",
+    "bundleName": "top.fellow99.pi.PiDesktopArk",
     "vendor": "fellow99",
     // versionCode 编码规则（对齐 pi-desktop-hos）：major*10000 + minor*100 + patch
     //   0.13.0 -> 0 * 10000 + 13 * 100 + 0 = 1300
