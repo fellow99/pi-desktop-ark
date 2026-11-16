@@ -105,7 +105,7 @@ node scripts/assemble-payload.mjs --apply --force
 ### TC-108-17 运行形态（编译期固定 compat）
 ```bash
 # 不带任何参数启动；形态由 BuildConfig.NODE_MODE 决定（默认 compat）
-hdc shell aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility
+hdc shell aa start -b top.fellow99.pi.PiDesktopArk -a EntryAbility
 hdc shell "cat <filesDir>/payload/node-mode.json"
 hdc shell "tail -50 <filesDir>/payload/app.log"
 ```
@@ -127,7 +127,7 @@ hdc shell "tail -50 <filesDir>/payload/app.log"
 ### TC-108-22 jit 变体回归（编译期切换）
 把 `common/BuildConfig.ets` 的 `NODE_MODE` 改成 `'jit'` 后重新构建、重装：
 ```bash
-hdc shell aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility
+hdc shell aa start -b top.fellow99.pi.PiDesktopArk -a EntryAbility
 hdc shell "cat <filesDir>/payload/node-mode.json"   # 期望 mode=jit、flags 不含 --jitless
 ```
 期望：`mode=jit（依据：ACL 已授予）`、`execArgv` **不含** `--jitless`；启动/对话/图片与改造前一致。

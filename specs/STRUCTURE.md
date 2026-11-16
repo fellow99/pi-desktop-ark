@@ -95,7 +95,7 @@ pi-desktop-ark/
 
 | 键 | 值 | 说明 |
 |---|---|---|
-| `bundleName` | `org.fellow99.pi.PiDesktopArk` | 包名；**签名证书与其绑定**，改包名 ⇒ ACL 必须重新申请（宪法 A10） |
+| `bundleName` | `top.fellow99.pi.PiDesktopArk` | 包名；**签名证书与其绑定**，改包名 ⇒ ACL 必须重新申请（宪法 A10） |
 | `vendor` | `fellow99` | — |
 | `versionCode` / `versionName` | `100` / `0.1.0` | 编码规则 `major*10000 + minor*100 + patch`（对齐旧壳）；上架每次必须递增（G7） |
 | `icon` / `label` | `$media:app_icon` / `$string:app_name`（"Pi Desktop Ark"） | 图标/命名/备案三一致的落点（G7） |

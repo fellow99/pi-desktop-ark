@@ -1,6 +1,6 @@
 # 已知坑：cwd 与沙箱路径（2026-10-17 真机实测）
 
-设备：HAD-W24 / `7.0.0.107(SP7C00E100R13P5)` / API 26。应用：`org.fellow99.pi.PiDesktopArk`。
+设备：HAD-W24 / `7.0.0.107(SP7C00E100R13P5)` / API 26。应用：`top.fellow99.pi.PiDesktopArk`。
 
 ## 1. 沙箱根只有**一个**基座：`context.filesDir`
 

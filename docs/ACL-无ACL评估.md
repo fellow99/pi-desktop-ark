@@ -66,7 +66,7 @@
 **设备实测（2026-10-19）**：用 debug 构建自带的调试通道起 jitless
 
 ```
-hdc shell aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps probeFlags "--jitless"
+hdc shell aa start -b top.fellow99.pi.PiDesktopArk -a EntryAbility --ps probeFlags "--jitless"
 ```
 
 读数：
@@ -139,7 +139,7 @@ hello-GET                                          # ✅
 | 8 | `pi-coding-agent/examples/.../doom.wasm` | 官方示例扩展 | 不加载 | 无需处理 |
 
 **不受影响（重要）**：ArkWeb 页面里的 JS **不需要**这条 ACL。实测证据：
-`org.fellow99.pi.PiDesktopArk:gpu` 的 **uid = 20100261、PPID = 5869**（系统侧服务），
+`top.fellow99.pi.PiDesktopArk:gpu` 的 **uid = 20100261、PPID = 5869**（系统侧服务），
 而应用主进程 **uid = 20020220** —— 渲染进程不在应用的权限域内（系统浏览器同款形态：
 `com.huawei.hmos.browser:render` uid 20100238/9）。⇒ 零 ACL 影响的是**进程内 Node**，不是前端 UI。
 
@@ -219,12 +219,12 @@ hello-GET                                          # ✅
 
 ```bash
 # 1) 零 ACL 现场（设备）：jitless 启动 ⇒ 约 0.5 s 后 SIGABRT
-hdc shell 'aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility --ps probeFlags "--jitless"'
-hdc shell "tail -30 /data/app/el2/100/base/org.fellow99.pi.PiDesktopArk/haps/entry/files/payload/node.log"
+hdc shell 'aa start -b top.fellow99.pi.PiDesktopArk -a EntryAbility --ps probeFlags "--jitless"'
+hdc shell "tail -30 /data/app/el2/100/base/top.fellow99.pi.PiDesktopArk/haps/entry/files/payload/node.log"
 hdc shell "hilog" | grep -a "LastFatalMessage\|Signal:SIGABRT"
 
 # 2) 对照（默认 flags）⇒ 存活、pi-web UI 正常
-hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility"
+hdc shell "aa start -b top.fellow99.pi.PiDesktopArk -a EntryAbility"
 
 # 3) fetch/WASM（本机，Node v24.7.0）
 node --jitless -e "console.log(typeof WebAssembly)"          # undefined
@@ -232,7 +232,7 @@ node --jitless -e "fetch('http://127.0.0.1:38999/x').catch(e=>console.log(e.caus
 #   → WebAssembly is not defined
 
 # 4) 载荷里的 WASM 清单
-hdc shell "find /data/app/el2/100/base/org.fellow99.pi.PiDesktopArk/haps/entry/files/payload/<hash>/pi-web -name '*.wasm'"
+hdc shell "find /data/app/el2/100/base/top.fellow99.pi.PiDesktopArk/haps/entry/files/payload/<hash>/pi-web -name '*.wasm'"
 #   → 8 个（见 §5）
 ```
 

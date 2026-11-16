@@ -171,7 +171,7 @@ hdc shell uitest uiInput click <x> <y>
 # ③ 回传：端上日志 POST 到开发机
 hdc rport tcp:19999
 # ④ hilog
-hdc shell hilog -x | grep -E "Cpp Crash|node-bridge|org.fellow99.pi"
+hdc shell hilog -x | grep -E "Cpp Crash|node-bridge|top.fellow99.pi"
 # 端到端证书（最有价值的一条）
 hdc fport tcp:15577 tcp:15577 && curl -s http://127.0.0.1:15577/facts
 hdc fport tcp:15577 tcp:15577 && curl -s http://127.0.0.1:15577/log
@@ -207,7 +207,7 @@ cmd //c "D:\oh-workspace\command-line-tools\bin\hvigorw.bat assembleHap --mode m
 # ④ 装机与取证
 hdc install -r entry/build/default/outputs/default/entry-default-signed.hap
 hdc shell "aa force-stop org.fellow99.test.NodeProbe"        # ⚠️ 探针会占 15577
-hdc shell "aa start -a EntryAbility -b org.fellow99.pi.PiDesktopArk --ps probeFlags '--no-verify-heap'"
+hdc shell "aa start -a EntryAbility -b top.fellow99.pi.PiDesktopArk --ps probeFlags '--no-verify-heap'"
 ```
 
 | 门禁 | 检查 | 失败含义 |

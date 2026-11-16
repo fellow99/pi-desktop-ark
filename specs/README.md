@@ -1,7 +1,7 @@
 # 规格文档索引 —— `pi-desktop-ark`
 
 **项目名称：** `pi-desktop-ark` · **定位名：** **HarmonyOS Edition**（HarmonyOS 版；对应 `pi-desktop-hos` = Electron on HarmonyOS Edition）
-**应用名 / 包名：** **Pi Desktop Ark** / `org.fellow99.pi.PiDesktopArk`
+**应用名 / 包名：** **Pi Desktop Ark** / `top.fellow99.pi.PiDesktopArk`
 **版本：** 应用 `0.1.0` / `versionCode` `100`；发布 tag `v0.12.1`；上游 `pi` v1.2.0 + `pi-web` v0.12.1
 **技术栈：** ArkTS 宿主（UIAbility + **ArkWeb**）+ `@fellow99/node-bridge` 0.1.0（进程内 `dlopen` + `node::Start`，Node v24.2.0）+ 端上 `pi-web` 服务（同源 HTTP + SSE）+ 同名工具扩展（纯 JS）；**不带任何 Chromium/Electron**
 **目标设备：** `2in1` / `tablet` / `phone`（真机 HAD-W24 · API 26 · arm64-v8a；TV 不列为验收对象）

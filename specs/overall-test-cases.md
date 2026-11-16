@@ -181,7 +181,7 @@
 ```bash
 hdc list targets                       # 设备：HAD-W32 / 序列号见 §5
 HAP=entry/build/default/outputs/default/entry-default-signed.hap
-FILES=/data/app/el2/100/base/org.fellow99.pi.PiDesktopArk/haps/entry/files
+FILES=/data/app/el2/100/base/top.fellow99.pi.PiDesktopArk/haps/entry/files
 
 # ① 「看」：截图
 hdc shell snapshot_display -f /data/local/tmp/s.jpeg && hdc file recv /data/local/tmp/s.jpeg ./
@@ -200,8 +200,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:18080/api/web-auth
 
 # 装机/启动前置
 hdc install -r $HAP
-hdc shell "aa force-stop org.fellow99.pi.PiDesktopArk"
-hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility"   # 形态由编译期常量决定（默认 compat）
+hdc shell "aa force-stop top.fellow99.pi.PiDesktopArk"
+hdc shell "aa start -b top.fellow99.pi.PiDesktopArk -a EntryAbility"   # 形态由编译期常量决定（默认 compat）
 ```
 
 **取证纪律**：每轮必须同时留「原始输出」+「复现命令」；证据落 `../logs/<YYYYMMDD>-N/`；
@@ -229,8 +229,8 @@ hvigorw assembleHap --mode module -p product=default -p buildMode=debug --no-dae
 hdc install -r entry/build/default/outputs/default/entry-default-signed.hap
 node <临时目录>/envsrv.mjs <临时环境文件> 19000 &
 hdc rport tcp:19000 tcp:19000
-hdc shell "aa force-stop org.fellow99.pi.PiDesktopArk"
-hdc shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility \
+hdc shell "aa force-stop top.fellow99.pi.PiDesktopArk"
+hdc shell "aa start -b top.fellow99.pi.PiDesktopArk -a EntryAbility \
   --ps piTestScript devtest/run.mjs --ps piTestSuite 108-fetch --ps piTestEnvFile http://127.0.0.1:19000/env.json"
 hdc shell "tail -40 $FILES/payload/node.log"
 ```

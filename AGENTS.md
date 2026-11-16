@@ -13,10 +13,11 @@ ArkTS 宿主（UIAbility + **ArkWeb**）加载端上 `pi-web` 服务，该服务
 （`@fellow99/node-bridge` + `@fellow99/node-runtime`，均 ohpm 中心仓，`dlopen` + `node::Start`，Node **v24.2.0**）。
 功能目标是与 `pi-desktop-hos`（Electron on HarmonyOS 版）对齐；载荷用 `pi-web` 补丁 **6 条**。
 
-- 应用名 / 包名：`Pi Desktop Ark` / `org.fellow99.pi.PiDesktopArk`
+- 应用名 / 包名：`Pi Desktop Ark` / `top.fellow99.pi.PiDesktopArk`
 - 目标设备：`2in1` / `tablet` / `phone` / `tv`（第 0 级真机已过：2in1 / tablet / phone；tv 未测）
-- 版本：`0.17.0` / `versionCode` `1700`（tag `v0.17.0`）
+- 版本：`0.17.0` / `versionCode` `1700`（tag `v0.17.0`；**0.17.0 真机已验**：新包名首装轮，徽标/对话/图片管线/Git 扩展/会话导出/设备侧套件全过，见 `docs/004-真机验证记录-0.17.0.md`）
 - 上游基线：`pi` **v1.5.2** + `pi-web` **v0.17.0**
+- 构建顺序坑：载荷源 = `../pi-desktop-hos/pi-dist`，**hos `collect-pi` 必须先于本工程 `assemble-payload`**（详见 README「构建」⓪ 与 `docs/004` §7）
 
 **⚠️ 运行形态**：编译期固定为 **compat（`--jitless`）**（`entry/src/main/ets/common/BuildConfig.ets` 的 `NODE_MODE`）。
 运行期无形态切换；compat 下 **code-mode 不注册**（依赖 WebAssembly）。出 jit 变体 = 改 `BuildConfig.NODE_MODE='jit'` 后重建。

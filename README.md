@@ -8,11 +8,11 @@
 | 项 | 值 |
 | --- | --- |
 | 版别 | **HarmonyOS Edition**（`pi-desktop-ark`） |
-| 应用名（桌面/窗口标签）/ 包名 | Pi Desktop Ark / `org.fellow99.pi.PiDesktopArk` |
+| 应用名（桌面/窗口标签）/ 包名 | Pi Desktop Ark / `top.fellow99.pi.PiDesktopArk` |
 | 目标设备 | `2in1` / `tablet` / `phone` / `tv`（同一产物，四种形态均已声明；已在 2in1、tablet、phone 真机完成第 0 级验证；`tv` 未测） |
 | 后端 | `@fellow99/node-bridge` + `@fellow99/node-runtime`（均 ohpm 中心仓包）起的 Node v24.2.0（进程内，`dlopen` + `node::Start`） |
 | 前端 | ArkWeb 加载 `http://127.0.0.1:<port>/`（页面由本地服务渲染，同源零 CORS） |
-| 当前状态 | **第 0 级真机已过，产品链路可用**：2in1 / tablet / phone 真机完成启动编排验证；载荷、免密鉴权、9 项宿主能力桥、6 条 pi-web 补丁、jitless 裁剪链均已落地；Git 扩展（204）已随载荷（🔧 专项真机轮次未归档）。遗留：多设备矩阵、部分能力真机专项（见 [`docs/001-能力复刻评估.md`](docs/001-能力复刻评估.md) 各 E 项与父工程 [`docs/能力对照清单.md`](../docs/能力对照清单.md)） |
+| 当前状态 | **0.17.0 真机已过（新包名 `top.fellow99.pi.PiDesktopArk` 首装轮，2026-11-16）**：启动编排 / 版本徽标（web 0.17.0 · pi 1.5.2）/ DeepSeek Key / 沙箱工作区 / 文本对话 / 图片附件管线（字节级一致；模型视觉受 DeepSeek 端限制，设备端 python3 像素分析替代路径有效）/ **Git 扩展本地生命周期全链（🔧 → ✅）** / 会话导出（🔧 → ✅）/ 设备侧套件 model 2/2 · 204-unit 26/0 · 204-e2e 17/0 · 108-fetch 14/0 · 108-photon 22/0，见 [`docs/004-真机验证记录-0.17.0.md`](docs/004-真机验证记录-0.17.0.md)。历史：第 0 级真机（2in1/tablet/phone）、0.15.0 轮（`docs/003`）。遗留：多设备矩阵、部分能力真机专项（见 [`docs/001-能力复刻评估.md`](docs/001-能力复刻评估.md) 各 E 项与父工程 [`docs/能力对照清单.md`](../docs/能力对照清单.md)） |
 | 规划文档 | [`docs/000-工程规划.md`](docs/000-工程规划.md)（v0.1，**结论以它为准**）；运行时契约见 [ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge) `docs/000-工程规划.md` §6 |
 
 ## 目录
@@ -36,10 +36,19 @@ pi-desktop-ark/
 ## 构建
 
 ```bash
+# ⓪ 前置（顺序坑，0.17.0 轮实战踩中）：本工程载荷源 = ../pi-desktop-hos/pi-dist（DEFAULT_FROM）。
+#    必须先完成 hos 侧「pi-web npm ci + prepare-next + collect-pi」（产出 0.17.0 pi-dist），
+#    再跑本工程 assemble-payload --apply；否则会镜像 hos 上一版 pi-dist
+#    （marker 是文本标记，跨版本同名不会缺失，不能当新鲜度依据）。
+#    载荷新鲜度断言以包内 package.json 版本 + 运行时 /api/app-update 为准（docs/004 §7）。
+
 # ① 安装依赖（主包 API + 运行时引擎，均来自 ohpm 中心仓）—— 必须先做，否则 HAP 里没有 Node
 ohpm install                              # @fellow99/node-bridge@0.1.0 + @fellow99/node-runtime@24.2.0
 
-# ② 构建 HAP
+# ② 载荷组装（打补丁 → 重编/镜像 pi-dist → 裁剪 → resfile/pi-web/pi-web.tar.gz + 版本）
+node scripts/assemble-payload.mjs --apply
+
+# ③ 构建 HAP
 export DEVECO_SDK_HOME='D:\oh-workspace\command-line-tools\sdk'
 export PATH="/d/oh-workspace/DevEco Studio/tools/node:$PATH"
 cmd //c "D:\oh-workspace\command-line-tools\bin\hvigorw.bat assembleHap --mode module -p product=default -p buildMode=debug --no-daemon"
@@ -51,7 +60,7 @@ cmd //c "D:\oh-workspace\command-line-tools\bin\hvigorw.bat assembleHap --mode m
 
 | # | 事项 | 说明 |
 | --- | --- | --- |
-| 1 | **调试签名** | 已在 DevEco 为 `org.fellow99.pi.PiDesktopArk` 生成（证书与包名绑定）。材料写在 `build-profile.json5` 的 `signingConfigs` 里；也可改用 `signing.debug.local.json` + 环境变量覆盖 |
+| 1 | **调试签名** | 已在 DevEco 为 `top.fellow99.pi.PiDesktopArk` 生成（证书与包名绑定）。材料写在 `build-profile.json5` 的 `signingConfigs` 里；也可改用 `signing.debug.local.json` + 环境变量覆盖 |
 | 2 | **运行形态 = compat（--jitless），现役 ACL 0 项** | 声明面 **20 项 requestPermissions + 1 项 definePermissions + `taskKeeping`**（2026-11-03 对齐 `dsh-desktop-ark` 收窄：在上轮剪贴板/桌面/持久化基础上去除 `kernel.ALLOW_WRITABLE_CODE_MEMORY`──运行期按 `BuildConfig.NODE_MODE=compat` 走 `--jitless`，无需 JIT 内存权限；文档/下载两项 normal 级保留用于点 Tab 时授权）。⇒ **签名不再依赖任何 ACL**，DevEco 自动调试 Profile（`allowed-acls` 只需 `READ_WRITE_{DOCUMENTS,DOWNLOAD}_DIRECTORY` 两项）即可通过；背景与代价见 [`docs/ACL配置.md`](docs/ACL配置.md)、[`docs/ACL-无ACL评估.md`](docs/ACL-无ACL评估.md) |
 
 > **签名材料与 git**：DevEco 的「自动生成签名」会把证书路径与**本机加密口令**直接写进

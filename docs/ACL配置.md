@@ -1,4 +1,4 @@
-# ACL 与权限配置（`org.fellow99.pi.PiDesktopArk`）
+# ACL 与权限配置（`top.fellow99.pi.PiDesktopArk`）
 
 > **口径**：与 `pi-desktop-hos` **逐项一致**（基准：`pi-desktop-hos/docs/ACL申请清单.md`）。
 > 落点：`entry/src/main/module.json5`（单一模块应用，声明面集中在 entry）。
@@ -98,7 +98,7 @@ ohos.permission.FILE_ACCESS_PERSIST
 1. 重新生成签名材料（DevEco → `File → Project Structure → Signing Configs`）；
 2. `hdc install -r entry/build/default/outputs/default/entry-default-signed.hap` —— **能装上**即说明 Profile 授权面已就位；
 3. `hdc shell "aa force-stop org.fellow99.test.NodeProbe"`（**先腾出 15577**，见 §3.1），再
-   `hdc shell "aa start -a EntryAbility -b org.fellow99.pi.PiDesktopArk --ps probeFlags '--no-verify-heap'"`；
+   `hdc shell "aa start -a EntryAbility -b top.fellow99.pi.PiDesktopArk --ps probeFlags '--no-verify-heap'"`；
 4. `hdc fport tcp:15577 tcp:15577 && curl -s http://127.0.0.1:15577/facts` —— 看 `wasm.validate` 与 `hotloop_ms_2e6`。
 
 ## 3. 两条实测设计规则
@@ -153,9 +153,9 @@ ACL 只决定**内存权限**，不影响库与原生库的加载：`libnode.so`
 ```bash
 # 0) 干净起点 + 亮屏（手机侧必须先亮屏，否则无法判断"弹窗是不是被锁屏挡掉"）
 hdc -t <key> shell "power-shell wakeup"
-hdc -t <key> uninstall org.fellow99.pi.PiDesktopArk
+hdc -t <key> uninstall top.fellow99.pi.PiDesktopArk
 hdc -t <key> install -r entry/build/default/outputs/default/entry-default-signed.hap
-hdc -t <key> shell "aa start -b org.fellow99.pi.PiDesktopArk -a EntryAbility"
+hdc -t <key> shell "aa start -b top.fellow99.pi.PiDesktopArk -a EntryAbility"
 
 # 1) 取真实端口并建隧道（⚠️ hdc 规则寿命只覆盖创建它的那次调用 ⇒ 建规则与用规则要写进同一条命令）
 PORT=$(hdc -t <key> shell "cat <filesDir>/payload/pi-web.ready.json" | python -c "import sys,json;print(json.load(sys.stdin)['port'])")
