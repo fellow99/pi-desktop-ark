@@ -39,6 +39,8 @@ pi-desktop-ark/
 # ⓪ 前置（顺序坑，0.17.0 轮实战踩中）：本工程载荷源 = ../pi-desktop-hos/pi-dist（DEFAULT_FROM）。
 #    必须先完成 hos 侧「pi-web npm ci + prepare-next + collect-pi」（产出 0.18.0 pi-dist），
 #    再跑本工程 assemble-payload --apply；否则会镜像 hos 上一版 pi-dist
+#    ⚠ 反向坑：本脚本会把「打过本工程补丁并重编」的 .next 镜像回 ../pi-desktop-hos/pi-dist/.next，
+#      之后若还想重出 hos 的载荷，必须重跑 hos 的 prepare-next 全链（见 hos AGENTS.md「构建顺序红线」）。
 #    （marker 是文本标记，跨版本同名不会缺失，不能当新鲜度依据）。
 #    载荷新鲜度断言以包内 package.json 版本 + 运行时 /api/app-update 为准（docs/004 §7）。
 

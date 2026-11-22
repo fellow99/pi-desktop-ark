@@ -26,7 +26,7 @@
 |---|---|
 | 上游基线 | `pi-web` tag **`v0.18.0`**（`2daa0d131eae6c2fd8c2a80872eee01ea3c7a0a1`，annotated tag `38bb6805`，`Release v0.18.0`）· `pi` tag **`v1.6.0`**（`faac585884ae2c013a6b1400f3e9e77f10b34bac`） |
 | 生成方式 | 独立 detached worktree `git worktree add --detach ../.tmp/wt-018 v0.18.0`；逐条 `git apply`（冲突条目手工重放）→ `git add` → `git commit` → `git diff HEAD^ HEAD > patches/v0.18.0/<同名>.patch`；**未经 PowerShell 重定向**，全目录 **UTF-8 / LF** |
-| 行尾口径修正 | v0.17.0 目录下 19 条补丁中 18 条为 **CRLF**（仅 `0007`/`0001-sync-daemon` 为 LF）。在 LF 工作树（WSL/Linux）上 `git apply` 对 CRLF 补丁必然失败，只有 Git-for-Windows（`core.autocrlf=true`）能容错。本轮起**统一 LF**，与「UTF-8 / LF」纪律一致，并已在 LF 环境下逐条验证可应用 |
+| 行尾口径修正 | v0.17.0 目录下 19 条补丁中 15 条为 **CRLF**（`pi-desktop/0001` 与四条 `sync-daemon`/`system-back` 系为 LF）。在 LF 工作树（WSL/Linux）上 `git apply` 对 CRLF 补丁必然失败，只有 Git-for-Windows（`core.autocrlf=true`）能容错。本轮起**统一 LF**，与「UTF-8 / LF」纪律一致，并已在 LF 环境下逐条验证可应用 |
 | 上游变更（v0.17.0→v0.18.0） | 127 文件，+4874/−946，34 提交 |
 | 冲突与处置 | 见下「本轮变更」 |
 | 验证 | ① pristine v0.18.0 上按文件名排序逐条 `git apply --check` + `git apply` 全绿；② 反序 `git apply --reverse` 后 `git status --porcelain` 为空（受影响文件 SHA-256 逐条还原） |
