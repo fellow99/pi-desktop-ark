@@ -12,7 +12,7 @@
 | 目标设备 | `2in1` / `tablet` / `phone` / `tv`（同一产物，四种形态均已声明；已在 2in1、tablet、phone 真机完成第 0 级验证；`tv` 未测） |
 | 后端 | `@fellow99/node-bridge` + `@fellow99/node-runtime`（均 ohpm 中心仓包）起的 Node v24.2.0（进程内，`dlopen` + `node::Start`） |
 | 前端 | ArkWeb 加载 `http://127.0.0.1:<port>/`（页面由本地服务渲染，同源零 CORS） |
-| 当前状态 | **0.17.0 真机已过（新包名 `top.fellow99.pi.PiDesktopArk` 首装轮，2026-11-16）**：启动编排 / 版本徽标（web 0.17.0 · pi 1.5.2）/ DeepSeek Key / 沙箱工作区 / 文本对话 / 图片附件管线（字节级一致；模型视觉受 DeepSeek 端限制，设备端 python3 像素分析替代路径有效）/ **Git 扩展本地生命周期全链（🔧 → ✅）** / 会话导出（🔧 → ✅）/ 设备侧套件 model 2/2 · 204-unit 26/0 · 204-e2e 17/0 · 108-fetch 14/0 · 108-photon 22/0，见 [`docs/004-真机验证记录-0.17.0.md`](docs/004-真机验证记录-0.17.0.md)。历史：第 0 级真机（2in1/tablet/phone）、0.15.0 轮（`docs/003`）。遗留：多设备矩阵、部分能力真机专项（见 [`docs/001-能力复刻评估.md`](docs/001-能力复刻评估.md) 各 E 项与父工程 [`docs/能力对照清单.md`](../docs/能力对照清单.md)） |
+| 当前状态 | **0.18.0 本轮已构建（未签名 HAP，本机无签名材料），真机复验待后续**；0.17.0 真机已过（新包名 `top.fellow99.pi.PiDesktopArk` 首装轮，2026-11-16）**：启动编排 / 版本徽标（web 0.17.0 · pi 1.5.2）/ DeepSeek Key / 沙箱工作区 / 文本对话 / 图片附件管线（字节级一致；模型视觉受 DeepSeek 端限制，设备端 python3 像素分析替代路径有效）/ **Git 扩展本地生命周期全链（🔧 → ✅）** / 会话导出（🔧 → ✅）/ 设备侧套件 model 2/2 · 204-unit 26/0 · 204-e2e 17/0 · 108-fetch 14/0 · 108-photon 22/0，见 [`docs/004-真机验证记录-0.17.0.md`](docs/004-真机验证记录-0.17.0.md)。历史：第 0 级真机（2in1/tablet/phone）、0.15.0 轮（`docs/003`）。遗留：多设备矩阵、部分能力真机专项（见 [`docs/001-能力复刻评估.md`](docs/001-能力复刻评估.md) 各 E 项与父工程 [`docs/能力对照清单.md`](../docs/能力对照清单.md)） |
 | 规划文档 | [`docs/000-工程规划.md`](docs/000-工程规划.md)（v0.1，**结论以它为准**）；运行时契约见 [ohos-node-bridge](https://github.com/fellow99/ohos-node-bridge) `docs/000-工程规划.md` §6 |
 
 ## 目录
@@ -37,7 +37,7 @@ pi-desktop-ark/
 
 ```bash
 # ⓪ 前置（顺序坑，0.17.0 轮实战踩中）：本工程载荷源 = ../pi-desktop-hos/pi-dist（DEFAULT_FROM）。
-#    必须先完成 hos 侧「pi-web npm ci + prepare-next + collect-pi」（产出 0.17.0 pi-dist），
+#    必须先完成 hos 侧「pi-web npm ci + prepare-next + collect-pi」（产出 0.18.0 pi-dist），
 #    再跑本工程 assemble-payload --apply；否则会镜像 hos 上一版 pi-dist
 #    （marker 是文本标记，跨版本同名不会缺失，不能当新鲜度依据）。
 #    载荷新鲜度断言以包内 package.json 版本 + 运行时 /api/app-update 为准（docs/004 §7）。
