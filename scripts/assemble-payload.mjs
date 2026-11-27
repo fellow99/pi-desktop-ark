@@ -37,10 +37,9 @@
 
 import { createHash } from 'node:crypto';
 import { createGunzip, createGzip } from 'node:zlib';
-import { execSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { createRequire } from 'node:module';
@@ -99,26 +98,6 @@ const ENTRY_REL = 'pi-web-launch.js';
  * ⇒ 只有归档内自带 `pi-web/` 这一层，落点才会是 `<…>/pi-web/pi-web-launch.js`。
  */
 const TAR_ROOT = 'pi-web';
-/** 301：进程内中枢服务同步依赖（固定版本；随载荷 node_modules 分发）。 */
-const SYNC_DEP_PACKAGES = ['@pi-agent-hub/sync-daemon@0.1.2', '@pi-agent-hub/sync-plugin-pi-web@0.1.2'];
-
-function installSyncPackages(targetRoot) {
-  const dest = path.join(targetRoot, 'node_modules', '@pi-agent-hub');
-  if (fs.existsSync(path.join(dest, 'sync-plugin-pi-web', 'dist', 'plugin.js'))) return;
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-sync-deps-'));
-  try {
-    execSync(`npm install --prefix "${tmp}" --no-save --no-package-lock --ignore-scripts --omit=dev ${SYNC_DEP_PACKAGES.join(' ')}`, {
-      stdio: 'inherit',
-      cwd: PROJECT_ROOT,
-      env: process.env,
-    });
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.cpSync(path.join(tmp, 'node_modules', '@pi-agent-hub'), dest, { recursive: true, force: true, dereference: true });
-    console.log('同步依赖    : 已注入 @pi-agent-hub（sync-daemon + sync-plugin-pi-web 0.1.2）');
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
-}
 
 /**
  * 应用自己的载荷覆盖层（本工程 `payload/`）：启动器 + 环境契约 + 预置扩展/配置。
@@ -128,7 +107,7 @@ function installSyncPackages(targetRoot) {
  * `payload/README.md` 刻意不投放（文档不进载荷）。
  */
 const APP_PAYLOAD_DIR = path.join(PROJECT_ROOT, 'payload');
-const APP_PAYLOAD_ENTRIES = ['pi-web-launch.js', 'sync-runtime.js', 'env.js', 'extensions', 'skills', 'config', 'jitless'];
+const APP_PAYLOAD_ENTRIES = ['pi-web-launch.js', 'env.js', 'extensions', 'skills', 'config', 'jitless'];
 
 // ── 命令行解析 ────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
@@ -647,8 +626,7 @@ const PI_WEB_PATCH_MARKERS = [
   { rel: '.next/server/app/api/cwd/validate/route.js', marker: 'pi-hos-sandbox-alias' },
   { rel: '.next/server/app/api/sessions/[id]/export/route.js', marker: 'pi-hos-export-runtime-guard' },
   { rel: '.next/server/app/api/cwd/browse/route.js', marker: 'pi-hos-picker-contract' },
-  { rel: '.next/server/app/api/host/perm/route.js', marker: 'pi-hos-perm-manual' },
-  { rel: '.next/server/app/api/sync-daemon/route.js', marker: 'pi-sync-daemon-route-v1' }
+  { rel: '.next/server/app/api/host/perm/route.js', marker: 'pi-hos-perm-manual' }
 ];
 
 /** 补丁阶段的失败（main 捕获后 exit 2：这是「输入不满足」，不是脚本 bug） */
@@ -1350,7 +1328,6 @@ async function main() {
     const cropCheck = assertCropApplied(tarRoot, stats, plan); // 回归检查：dry run 说裁了，这里必须真裁掉
     await stageBridgeFiles(bridge.files, tarRoot, '入归档');
     await stageBridgeFiles(appPayload.files, tarRoot, '入归档');
-    installSyncPackages(tarRoot);
     applyWebBranding(tarRoot);
     console.log(`应用载荷覆盖: 已入归档 ${appPayload.files.length} 个（${APP_PAYLOAD_ENTRIES.join(' / ')}）`);
     /*

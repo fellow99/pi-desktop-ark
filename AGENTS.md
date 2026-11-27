@@ -36,7 +36,7 @@ ArkTS 宿主（UIAbility + **ArkWeb**）加载端上 `pi-web` 服务，该服务
 | `scripts/` | 载荷组装等构建脚本（`assemble-payload.mjs` 为核心）、jitless 裁剪链 |
 | `specs/` | 规格文档集（`011` 版本 / `013` 品牌化 / `1XX` 基础 / `204` Git） |
 | `docs/` | 工程规划、能力复刻评估、ACL 评估/配置、真机记录 |
-| `patches/` | 上游 `pi-web` 补丁（`v0.18.0/` 7 条幂等可逆文件） |
+| `patches/` | 上游 `pi-web` 补丁（`v0.18.0/` 6 条幂等可逆文件） |
 
 **构建前提**：依赖 `ohpm` 中心仓运行时包；需 `DEVECO_SDK_HOME` 与 `hvigorw`；脱离开源目录会失败。
 

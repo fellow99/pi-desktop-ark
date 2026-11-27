@@ -5,7 +5,8 @@
 > （应用 → 反向 → 受影响文件 SHA-256 逐条还原）· 按**被 patch 的上游 tag** 建目录 ·
 > 只在**独立 detached worktree** 里生成 · 每条登记「触发条件 / 实施时机 / 替代方案」。
 
-> **现状（2026-11-22）**：**7 条**补丁，`patches/v0.11.1/` `v0.12.1/` `v0.13.0/` `v0.14.1/` `v0.14.2/` `v0.15.0/` `v0.17.0/` 保留可追溯，当前目录 **`patches/v0.18.0/`**（被 patch 的上游 `pi-web` tag `v0.18.0` `2daa0d1`）。
+> **现状（2026-11-24）**：**6 条**补丁，`patches/v0.11.1/` `v0.12.1/` `v0.13.0/` `v0.14.1/` `v0.14.2/` `v0.15.0/` `v0.17.0/` 保留可追溯，当前目录 **`patches/v0.18.0/`**（被 patch 的上游 `pi-web` tag `v0.18.0` `2daa0d1`）。
+> **301 退场（2026-11-24）**：`0007-sync-daemon-settings-tab` 已移除（中枢服务同步对接由 `pi-desktop` 单独提供，本工程不再内嵌 sync-daemon）；故目录内编号保留空洞（0006 早在 v0.12.1 并入 0005，0007 本轮退役），不复用既有编号。
 > **v0.14.1 重出记录**：上游 **#1462** 在 `components/DirectoryPicker.tsx` 新增 backdrop 按下追踪
 > （`backdropPressRef`/`createBackdropPressRef`）并把 `canSelect` 并入 `!loading`、移除 `canCreate`，
 > 致 `0005-directory-picker-contract` 与 `0006-directory-picker-permission-flow` **上下文漂移**；
@@ -40,7 +41,6 @@
 | `0003-cwd-hdc-path-alias-normalize` | 无冲突，重新生成 |
 | `0004-session-export-runtime-identity-guard` | **删除冗余 hunk 片段**：上游 #1695 已自行加 `/* webpackIgnore: true */`，故本轮保留首 hunk（`runtimeIsSpawnable` 运行时判据）与 `console.warn` 诊断块，删去重复的 import 行改写与 4 行中文说明 |
 | `0005-directory-picker` | 无冲突，重新生成 |
-| `0007-sync-daemon-settings-tab` | 无冲突，重新生成 |
 | `0008-system-back` | 无冲突，重新生成 |
 
 ## 0. 已登记补丁
@@ -127,17 +127,3 @@
 ```
 
 因此载荷**不依赖手改 `../pi-web` 工作树**：源码补丁 + 重新编译 + 产物断言三件事都在同一条命令里。
-
-## 附录：P301-K1 — 中枢服务设置分区（2026-11-22）
-
-| 项 | 内容 |
-|---|---|
-| 文件 | `patches/v0.18.0/0007-sync-daemon-settings-tab.patch` |
-| 全局编号 | `P301-K1` |
-| 打补丁的上游 | `pi-web` tag `v0.18.0` |
-| 内容 | `lib/settings-navigation.ts`（加 `sync`）、`components/SettingsPanel.tsx`（分区项/渲染）、新增 `components/SyncConfig.tsx`（fetch `/api/sync-daemon`）、新增 `app/api/sync-daemon/route.ts`（代理进程内控制面）、三套 `lib/i18n/messages/*.ts` |
-| 触发条件 | 301 第三轮：pi-desktop-ark 无可用子进程，sync-daemon 与插件改为**进程内**运行；设置入口统一到 pi-web 设置对话框 |
-| 实施时机 | `assemble-payload.mjs` / `collect-pi.mjs` 构建期幂等应用，构建后回退（`../pi-web` 保持 pristine） |
-| 替代方案 | 原生设置页（重复建设，否决）；运行时 DOM 注入（依赖上游结构、升级静默失效，否决） |
-| 回退方式 | `git -C ../pi-web apply --reverse patches/v0.18.0/0007-sync-daemon-settings-tab.patch` |
-| 规格 | `specs/301-sync-daemon/{spec,plan}.md` |
