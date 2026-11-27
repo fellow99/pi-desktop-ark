@@ -15,8 +15,8 @@ ArkTS 宿主（UIAbility + **ArkWeb**）加载端上 `pi-web` 服务，该服务
 
 - 应用名 / 包名：`Pi Desktop Ark` / `top.fellow99.pi.PiDesktopArk`
 - 目标设备：`2in1` / `tablet` / `phone` / `tv`（第 0 级真机已过：2in1 / tablet / phone；tv 未测）
-- 版本：`0.18.0` / `versionCode` `1800`（tag `v0.18.0`；**0.18.0 本轮仅本机构建未签名 HAP，真机复验待测试机**；0.17.0 轮真机已验，见 `docs/004-真机验证记录-0.17.0.md`）
-- 上游基线：`pi` **v1.6.0** + `pi-web` **v0.18.0**
+- 版本：`0.19.0` / `versionCode` `1900`（tag `v0.19.0`；**0.19.0 本轮构建并 debug 签名通过（136,077,761 B），真机复验待测试机**；0.17.0 轮真机已验，见 `docs/004-真机验证记录-0.17.0.md`）
+- 上游基线：`pi` **v1.6.1** + `pi-web` **v0.19.0**
 - 构建顺序坑：载荷源 = `../pi-desktop-hos/pi-dist`，**hos `collect-pi` 必须先于本工程 `assemble-payload`**（详见 README「构建」⓪ 与 `docs/004` §7）
 
 **⚠️ 运行形态**：编译期固定为 **compat（`--jitless`）**（`entry/src/main/ets/common/BuildConfig.ets` 的 `NODE_MODE`）。
@@ -36,7 +36,7 @@ ArkTS 宿主（UIAbility + **ArkWeb**）加载端上 `pi-web` 服务，该服务
 | `scripts/` | 载荷组装等构建脚本（`assemble-payload.mjs` 为核心）、jitless 裁剪链 |
 | `specs/` | 规格文档集（`011` 版本 / `013` 品牌化 / `1XX` 基础 / `204` Git） |
 | `docs/` | 工程规划、能力复刻评估、ACL 评估/配置、真机记录 |
-| `patches/` | 上游 `pi-web` 补丁（`v0.18.0/` 6 条幂等可逆文件） |
+| `patches/` | 上游 `pi-web` 补丁（`v0.19.0/` 6 条幂等可逆文件） |
 
 **构建前提**：依赖 `ohpm` 中心仓运行时包；需 `DEVECO_SDK_HOME` 与 `hvigorw`；脱离开源目录会失败。
 

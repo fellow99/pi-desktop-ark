@@ -5,7 +5,7 @@
 > （应用 → 反向 → 受影响文件 SHA-256 逐条还原）· 按**被 patch 的上游 tag** 建目录 ·
 > 只在**独立 detached worktree** 里生成 · 每条登记「触发条件 / 实施时机 / 替代方案」。
 
-> **现状（2026-11-24）**：**6 条**补丁，`patches/v0.11.1/` `v0.12.1/` `v0.13.0/` `v0.14.1/` `v0.14.2/` `v0.15.0/` `v0.17.0/` 保留可追溯，当前目录 **`patches/v0.18.0/`**（被 patch 的上游 `pi-web` tag `v0.18.0` `2daa0d1`）。
+> **现状（2026-11-27）**：**6 条**补丁，`patches/v0.11.1/` `v0.12.1/` `v0.13.0/` `v0.14.1/` `v0.14.2/` `v0.15.0/` `v0.17.0/` `v0.18.0/` 保留可追溯，当前目录 **`patches/v0.19.0/`**（被 patch 的上游 `pi-web` tag `v0.19.0` `7b77aa1a`）。
 > **301 退场（2026-11-24）**：`0007-sync-daemon-settings-tab` 已移除（中枢服务同步对接由 `pi-desktop` 单独提供，本工程不再内嵌 sync-daemon）；故目录内编号保留空洞（0006 早在 v0.12.1 并入 0005，0007 本轮退役），不复用既有编号。
 > **v0.14.1 重出记录**：上游 **#1462** 在 `components/DirectoryPicker.tsx` 新增 backdrop 按下追踪
 > （`backdropPressRef`/`createBackdropPressRef`）并把 `canSelect` 并入 `!loading`、移除 `canCreate`，
@@ -16,12 +16,33 @@
 > **v0.14.2（2026-11-04）**：补丁领域 6 个文件在 v0.14.1→v0.14.2 均无变更 ⇒ `patches/v0.14.1/` 六条直接拷贝为 `patches/v0.14.2/`（逐字节相同），零漂移；已在本轮 pristine v0.14.2 上按序应用 + 反向往返回 pristine PASS；`assemble-payload.mjs` `PI_WEB_PATCH_TAG=v0.14.2`。
 > **v0.15.0（2026-11-05）**：上游唯一补丁领域交集是 session-export（`1fbf6c6` 删除被 pi 1.5.0 迭代模板废弃的 `patchExportHtml()`），与本工程 `0004-session-export-runtime-identity-guard` 的 `exportSession()` 改动区域**不重叠** ⇒ `patches/v0.14.2/` 六条直接拷贝为 `patches/v0.15.0/`（逐字节相同）；已在 pristine v0.15.0 上按序累计 dry-run 全绿（14/14，含 hos/android 集合）；`assemble-payload.mjs` `PI_WEB_PATCH_TAG=v0.15.0`。
 
-目录名 = 被 patch 的那一侧的上游 tag（当前 **`v0.18.0`**，即 `pi-web` `2daa0d1`）。
+目录名 = 被 patch 的那一侧的上游 tag（当前 **`v0.19.0`**，即 `pi-web` `7b77aa1a`）。
 上游升级时**新建目录**、旧目录保留可追溯，并同步
 `scripts/assemble-payload.mjs` 的 `PI_WEB_PATCH_TAG`。
 
 
-## 0.0 v0.18.0 rebase 记录（2026-11-22）
+## 0.0 v0.19.0 rebase 记录（2026-11-27）
+
+| 项 | 内容 |
+|---|---|
+| 上游基线 | `pi-web` tag **`v0.19.0`**（`7b77aa1a01a74597280dd5bbc9221195411bddf4`，annotated tag `e5192a7557f73dadea42a76aab785f65597f2197`，`Release v0.19.0`）· `pi` tag **`v1.6.1`**（`ef4a1cfcca62b77ad3558337ff3e1c7f6beeadfe`） |
+| 生成方式 | 独立 detached worktree `git worktree add --detach ../.tmp/wt-019 v0.19.0`；逐条 `git apply`（冲突条目手工重放）→ `git add` → `git commit` → `git diff HEAD^ HEAD > patches/v0.19.0/<同名>.patch`；**未经 PowerShell 重定向**，全目录 **UTF-8 / LF** |
+| 上游变更（v0.18.0→v0.19.0） | 284 文件，+8976/−2383，44 提交 |
+| 冲突与处置 | 见下「本轮变更」 |
+| 验证 | ① pristine v0.19.0 上按文件名排序逐条 `git apply --check` + `git apply` 全绿（6/6）；② 反序 `git apply --reverse` 后 `git status --porcelain` 为空 |
+
+### 本轮变更
+
+| 补丁 | 变更 |
+|---|---|
+| `0001-terminal-capability-unsupported` | **导入重定位**：上游 #1757 给 `app/api/terminal/route.ts` 加了 `import { errorMessage } from "@/lib/errors"`，正好落在本补丁插入 `terminalCapability` 导入的位置。本轮改为插在 `errorMessage` 之后，`GET()` 与 `POST` 能力门位置不变 |
+| `0002-cwd-sandbox-root-from-hos-roots` | 无冲突，逐字节沿用 |
+| `0003-cwd-hdc-path-alias-normalize` | 无冲突，逐字节沿用 |
+| `0004-session-export-runtime-identity-guard` | 无冲突（上游改动只在 `Content-Disposition` 抽函数处），逐字节沿用 |
+| `0005-directory-picker` | **1 处上下文冲突**：同 HOS `0001`，上游把 `components/DirectoryPicker.tsx` 的 `createDirectory` 改用 `readJsonOrThrow` 并把两处错误处理改为 `errorMessage(cause)`。处置：`--exclude=components/DirectoryPicker.tsx` 应用其余文件后，在 v0.19.0 上重放该文件（上游 4 处改动逐一采纳；`loadDirectories` 仍保留本补丁的 `BrowseError`，需读回 `code`/`permission`/`canRequest`）。补丁 43570 B |
+| `0008-system-back` | 无冲突（上游 `components/AppShell.tsx` +45/−22 不在本补丁上下文区间），逐字节沿用 |
+
+## 0.0b v0.18.0 rebase 记录（2026-11-22）
 
 | 项 | 内容 |
 |---|---|
