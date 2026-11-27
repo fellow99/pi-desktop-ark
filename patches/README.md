@@ -37,10 +37,10 @@
 |---|---|
 | `0001-terminal-capability-unsupported` | **导入重定位**：上游 #1757 给 `app/api/terminal/route.ts` 加了 `import { errorMessage } from "@/lib/errors"`，正好落在本补丁插入 `terminalCapability` 导入的位置。本轮改为插在 `errorMessage` 之后，`GET()` 与 `POST` 能力门位置不变 |
 | `0002-cwd-sandbox-root-from-hos-roots` | 无冲突，逐字节沿用 |
-| `0003-cwd-hdc-path-alias-normalize` | 无冲突，逐字节沿用 |
-| `0004-session-export-runtime-identity-guard` | 无冲突（上游改动只在 `Content-Disposition` 抽函数处），逐字节沿用 |
-| `0005-directory-picker` | **1 处上下文冲突**：同 HOS `0001`，上游把 `components/DirectoryPicker.tsx` 的 `createDirectory` 改用 `readJsonOrThrow` 并把两处错误处理改为 `errorMessage(cause)`。处置：`--exclude=components/DirectoryPicker.tsx` 应用其余文件后，在 v0.19.0 上重放该文件（上游 4 处改动逐一采纳；`loadDirectories` 仍保留本补丁的 `BrowseError`，需读回 `code`/`permission`/`canRequest`）。补丁 43570 B |
-| `0008-system-back` | 无冲突（上游 `components/AppShell.tsx` +45/−22 不在本补丁上下文区间），逐字节沿用 |
+| `0003-cwd-hdc-path-alias-normalize` | 无冲突，（**重生成**：hunk 内容逐字不变，`index` 哈希与 hunk 行号随上游重排） |
+| `0004-session-export-runtime-identity-guard` | 无冲突（上游改动只在 `Content-Disposition` 抽函数处），（**重生成**：hunk 内容逐字不变，`index` 哈希与 hunk 行号随上游重排） |
+| `0005-directory-picker` | **1 处上下文冲突**：同 HOS `0001`，上游把 `components/DirectoryPicker.tsx` 的 `createDirectory` 改用 `readJsonOrThrow` 并把两处错误处理改为 `errorMessage(cause)`。处置：`--exclude=components/DirectoryPicker.tsx` 应用其余文件后，在 v0.19.0 上重放该文件（上游 5 处改动逐一采纳：2 条 import + `createDirectory` + 2 处 `errorMessage(cause)`；`loadDirectories` 仍保留本补丁的 `BrowseError`，需读回 `code`/`permission`/`canRequest`）。补丁 43570 B |
+| `0008-system-back` | 无冲突（上游 `components/AppShell.tsx` +45/−22 不在本补丁上下文区间），（**重生成**：hunk 内容逐字不变，`index` 哈希与 hunk 行号随上游重排） |
 
 ## 0.0b v0.18.0 rebase 记录（2026-11-22）
 
